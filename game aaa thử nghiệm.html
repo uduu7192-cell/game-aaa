@@ -1,0 +1,2306 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AETHER REALMS - Ultimate Graphics & VFX Edition</title>
+
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    
+    <!-- Three.js -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    
+    <!-- Font Awesome Icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    
+    <!-- PeerJS for Real P2P Realtime Online Multiplayer -->
+    <script src="https://unpkg.com/peerjs@1.5.2/dist/peerjs.min.js"></script>
+
+    <!-- Firebase SDK (Relay Sync Fallback) -->
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
+        import { getDatabase, ref, set, onValue, remove } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-database.js";
+
+        const firebaseConfig = {
+            databaseURL: "https://aether-realms-default-rtdb.firebaseio.com"
+        };
+
+        try {
+            const app = initializeApp(firebaseConfig);
+            window.fbDb = getDatabase(app);
+            window.fbRef = ref;
+            window.fbSet = set;
+            window.fbOnValue = onValue;
+            window.fbRemove = remove;
+        } catch(e) {
+            console.warn("Firebase fallback active in offline mode.");
+        }
+    </script>
+    
+    <!-- Google Fonts -->
+    <link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@600;800;900&family=Rajdhani:wght@500;600;700&display=swap" rel="stylesheet">
+
+    <style>
+        body {
+            margin: 0;
+            overflow: hidden;
+            font-family: 'Rajdhani', sans-serif;
+            background-color: #020617;
+            color: #f3f4f6;
+            user-select: none;
+        }
+
+        .font-cinzel { font-family: 'Cinzel', serif; }
+
+        .glass-panel {
+            background: rgba(5, 10, 20, 0.96);
+            backdrop-filter: blur(24px);
+            border: 1px solid rgba(234, 179, 8, 0.3);
+            box-shadow: 0 30px 70px rgba(0, 0, 0, 0.95), 0 0 40px rgba(234, 179, 8, 0.15);
+        }
+
+        .glass-button {
+            background: linear-gradient(135deg, rgba(255,255,255,0.12) 0%, rgba(255,255,255,0.03) 100%);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+
+        .glass-button:hover {
+            border-color: rgba(234, 179, 8, 0.95);
+            box-shadow: 0 0 35px rgba(234, 179, 8, 0.5);
+            transform: translateY(-2px);
+        }
+
+        .glass-button-active {
+            border-color: #eab308;
+            background: linear-gradient(135deg, rgba(234, 179, 8, 0.35) 0%, rgba(234, 179, 8, 0.12) 100%);
+            box-shadow: 0 0 40px rgba(234, 179, 8, 0.7);
+        }
+
+        ::-webkit-scrollbar { width: 6px; }
+        ::-webkit-scrollbar-track { background: rgba(0,0,0,0.4); }
+        ::-webkit-scrollbar-thumb { background: rgba(234, 179, 8, 0.6); border-radius: 3px; }
+
+        #crosshair {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            width: 18px;
+            height: 18px;
+            transform: translate(-50%, -50%);
+            pointer-events: none;
+        }
+
+        #crosshair::before, #crosshair::after {
+            content: '';
+            position: absolute;
+            background: rgba(56, 189, 248, 0.95);
+            box-shadow: 0 0 14px rgba(56, 189, 248, 1);
+        }
+
+        #crosshair::before { top: 8px; left: -10px; width: 38px; height: 2px; }
+        #crosshair::after { top: -10px; left: 8px; width: 2px; height: 38px; }
+
+        #crosshair-dot {
+            position: absolute;
+            top: 7px;
+            left: 7px;
+            width: 4px;
+            height: 4px;
+            background: #facc15;
+            border-radius: 50%;
+            box-shadow: 0 0 12px #facc15;
+        }
+
+        .vignette {
+            position: fixed;
+            top: 0; left: 0; width: 100%; height: 100%;
+            box-shadow: 0 0 180px rgba(0, 0, 0, 0.98) inset;
+            pointer-events: none;
+        }
+
+        .dmg-text {
+            position: absolute;
+            font-weight: 900;
+            font-family: 'Cinzel', serif;
+            pointer-events: none;
+            animation: floatUp 0.8s ease-out forwards;
+            text-shadow: 0 0 14px rgba(0,0,0,0.98);
+        }
+
+        @keyframes floatUp {
+            0% { opacity: 1; transform: translate(-50%, 0) scale(1.5); }
+            100% { opacity: 0; transform: translate(-50%, -90px) scale(0.8); }
+        }
+    </style>
+</head>
+<body class="bg-black select-none overflow-hidden">
+
+    <!-- CANVAS CONTAINER -->
+    <div id="canvas-container" class="absolute inset-0 z-0"></div>
+    <div class="vignette z-10"></div>
+
+    <!-- DAMAGE TEXT CONTAINER -->
+    <div id="damage-container" class="absolute inset-0 pointer-events-none z-15"></div>
+
+    <!-- FPS COUNTER OVERLAY -->
+    <div id="fps-counter" class="absolute top-4 left-4 z-20 font-mono text-xs bg-black/85 backdrop-blur border border-amber-500/50 text-amber-400 px-4 py-2 rounded-xl shadow-2xl flex items-center gap-3">
+        <div><i class="fa-solid fa-gauge-high mr-1"></i> <span id="val-fps" class="font-bold text-white">60</span> FPS</div>
+        <div class="text-gray-500">|</div>
+        <div><span id="val-ms" class="text-xs text-gray-300">16</span> ms</div>
+    </div>
+
+    <!-- PAUSE / ESC OVERLAY -->
+    <div id="pause-overlay" class="absolute inset-0 z-25 bg-black/75 backdrop-blur-md flex items-center justify-center hidden pointer-events-auto">
+        <div class="p-8 rounded-2xl glass-panel max-w-md w-full text-center border border-amber-500/60">
+            <h2 class="text-3xl font-black font-cinzel text-amber-400 mb-2">TẠM DỪNG TRẬN ĐẤU</h2>
+            <p class="text-xs text-gray-300 mb-6">Xoay góc nhìn bằng chuột. Nhấn ESC để mở/khóa con trỏ chuột.</p>
+            <div class="flex flex-col gap-3">
+                <button onclick="resumeGame()" class="py-3 bg-amber-500 hover:bg-amber-400 text-black font-bold rounded-xl uppercase tracking-wider transition-all cursor-pointer shadow-lg shadow-amber-500/40">
+                    Tiếp Tục Trận Đấu
+                </button>
+                <button onclick="returnToMenu()" class="py-3 bg-red-600/85 hover:bg-red-500 text-white font-bold rounded-xl uppercase tracking-wider transition-all cursor-pointer shadow-lg shadow-red-600/40">
+                    Thoát Ra Menu
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- MAIN MENU OVERLAY -->
+    <div id="main-menu" class="absolute inset-0 z-20 flex items-center justify-center bg-black/75 backdrop-blur-md transition-opacity duration-500">
+        <div class="max-w-4xl w-full mx-4 p-8 rounded-2xl glass-panel relative overflow-hidden text-center">
+            
+            <div class="mb-6">
+                <h1 class="text-5xl md:text-7xl font-extrabold font-cinzel text-transparent bg-clip-text bg-gradient-to-r from-amber-200 via-yellow-400 to-amber-600 drop-shadow-[0_5px_30px_rgba(234,179,8,0.7)] tracking-wider">
+                    AETHER REALMS
+                </h1>
+                <p class="text-yellow-100/90 text-sm md:text-base tracking-widest uppercase mt-2 font-bold">
+                    PHIÊN BẢN ĐỒ HỌA & HIỆU ỨNG CHIÊU THỨC TUYỆT ĐỈNH (AAA)
+                </p>
+            </div>
+
+            <div class="mb-6 max-w-sm mx-auto">
+                <label class="block text-xs uppercase font-bold text-amber-400 mb-1">Tên Dấu Ấn Chiến Binh (Nickname)</label>
+                <input id="player-nickname-input" type="text" value="Chiến Binh Aether" maxlength="16" class="w-full bg-black/85 border border-amber-500/70 rounded-xl px-4 py-2.5 text-center text-amber-200 font-bold focus:outline-none focus:border-amber-400 shadow-inner">
+            </div>
+
+            <!-- HERO SELECTION -->
+            <div class="mb-6">
+                <h3 class="text-xs uppercase tracking-widest text-amber-400/90 mb-3 font-bold">Chọn Tướng Chi Tiết Cao & Chiêu Thức Độc Quyền</h3>
+                <div class="grid grid-cols-2 md:grid-cols-4 gap-3">
+                    <button onclick="selectHero('WARRIOR')" id="hero-WARRIOR" class="hero-btn glass-button p-3.5 rounded-xl flex flex-col items-center gap-2 group glass-button-active">
+                        <i class="fa-solid fa-sword text-2xl text-amber-400 group-hover:scale-110 transition-transform"></i>
+                        <span class="font-bold text-sm">Kiếm Sĩ Hoàng Gia</span>
+                        <span class="text-[10px] text-gray-400">Thánh Kiếm • Vệt Trảm • Phong Ma Vũ</span>
+                    </button>
+                    <button onclick="selectHero('ARCHER')" id="hero-ARCHER" class="hero-btn glass-button p-3.5 rounded-xl flex flex-col items-center gap-2 group">
+                        <i class="fa-solid fa-bow-arrow text-2xl text-emerald-400 group-hover:scale-110 transition-transform"></i>
+                        <span class="font-bold text-sm">Cung Thủ Tiên Tộc</span>
+                        <span class="text-[10px] text-gray-400">Áo Choàng • Mưa Tên • Tên Thần</span>
+                    </button>
+                    <button onclick="selectHero('GUNNER')" id="hero-GUNNER" class="hero-btn glass-button p-3.5 rounded-xl flex flex-col items-center gap-2 group">
+                        <i class="fa-solid fa-gun text-2xl text-red-400 group-hover:scale-110 transition-transform"></i>
+                        <span class="font-bold text-sm">Xạ Thủ Plasma</span>
+                        <span class="text-[10px] text-gray-400">Giáp Động Lực • Dual Gun • Tên Lửa</span>
+                    </button>
+                    <button onclick="selectHero('MAGE')" id="hero-MAGE" class="hero-btn glass-button p-3.5 rounded-xl flex flex-col items-center gap-2 group">
+                        <i class="fa-solid fa-wand-magic-sparkles text-2xl text-purple-400 group-hover:scale-110 transition-transform"></i>
+                        <span class="font-bold text-sm">Pháp Sư Tinh Tú</span>
+                        <span class="text-[10px] text-gray-400">Gậy Phép • Hố Đen • Sét Đỉnh Vực</span>
+                    </button>
+                </div>
+            </div>
+
+            <!-- MODE SELECTION -->
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
+                <button type="button" onclick="startSinglePlayer(event)" class="glass-button p-5 rounded-xl text-left flex flex-col justify-between group relative overflow-hidden border-amber-500/50 cursor-pointer">
+                    <div>
+                        <div class="text-amber-400 font-bold text-lg mb-1 flex items-center justify-between">
+                            Chơi Single / Offline
+                            <i class="fa-solid fa-user text-xl text-amber-400/80 group-hover:scale-125 transition-transform"></i>
+                        </div>
+                        <p class="text-xs text-gray-300">Tự mình chinh phục 10 Cửa Ải, nâng cấp đồ nhiều cấp & diệt Boss!</p>
+                    </div>
+                    <span class="mt-4 text-xs font-bold text-amber-300 uppercase tracking-wider flex items-center gap-1">
+                        Bắt Đầu Vượt Ải <i class="fa-solid fa-play"></i>
+                    </span>
+                </button>
+
+                <button type="button" onclick="createOnlineRoom(event)" class="glass-button p-5 rounded-xl text-left flex flex-col justify-between group relative overflow-hidden border-cyan-500/50 cursor-pointer">
+                    <div>
+                        <div class="text-cyan-400 font-bold text-lg mb-1 flex items-center justify-between">
+                            Tạo Phòng Online
+                            <i class="fa-solid fa-plus-circle text-xl text-cyan-400/80 group-hover:scale-125 transition-transform"></i>
+                        </div>
+                        <p class="text-xs text-gray-300">Tạo phòng Co-op 2 người. Đánh chung 1 con quái & đồng bộ ải!</p>
+                    </div>
+                    <span class="mt-4 text-xs font-bold text-cyan-300 uppercase tracking-wider flex items-center gap-1">
+                        Mở Phòng Chờ <i class="fa-solid fa-arrow-right"></i>
+                    </span>
+                </button>
+
+                <div class="glass-button p-5 rounded-xl text-left flex flex-col justify-between border-purple-500/50">
+                    <div>
+                        <div class="text-purple-400 font-bold text-lg mb-1 flex items-center justify-between">
+                            Tham Gia Phòng
+                            <i class="fa-solid fa-right-to-bracket text-xl text-purple-400/80"></i>
+                        </div>
+                        <input id="join-room-input" type="text" placeholder="Nhập mã 6 số..." class="w-full bg-black/75 border border-purple-500/60 rounded-lg px-3.5 py-2 text-sm text-purple-200 placeholder-gray-500 focus:outline-none focus:border-purple-400 mt-2 uppercase tracking-widest font-mono">
+                    </div>
+                    <button type="button" onclick="joinOnlineRoom(event)" class="mt-3 w-full py-2.5 bg-purple-600 hover:bg-purple-500 text-white rounded-lg text-xs font-bold uppercase tracking-wider transition-colors shadow-lg shadow-purple-600/40 cursor-pointer">
+                        Vào Phòng Chờ
+                    </button>
+                </div>
+            </div>
+
+            <div id="menu-status" class="text-xs text-amber-300 font-mono min-h-[22px] bg-black/70 py-2 px-4 rounded-xl border border-white/10">
+                Sẵn sàng chiến đấu. Hãy chọn Tướng và Bắt đầu!
+            </div>
+        </div>
+    </div>
+
+    <!-- LOBBY ROOM OVERLAY -->
+    <div id="lobby-modal" class="absolute inset-0 z-25 flex items-center justify-center bg-black/90 backdrop-blur-md hidden">
+        <div class="p-8 rounded-2xl glass-panel text-center max-w-2xl w-full mx-4 border border-cyan-500/70 shadow-2xl relative">
+            <div class="flex justify-between items-center mb-6 border-b border-white/10 pb-4">
+                <div>
+                    <h2 class="text-2xl font-black font-cinzel text-cyan-400 text-left">PHÒNG CHỜ CO-OP VƯỢT ẢI</h2>
+                    <p class="text-xs text-gray-400 text-left">Kết nối đồng đội cùng nâng cấp trang bị & vượt qua 10 Cửa Ải!</p>
+                </div>
+                <div class="bg-black/85 border border-cyan-500/80 rounded-xl px-4 py-2 font-mono text-cyan-300 shadow-inner">
+                    MÃ PHÒNG: <span id="lobby-room-code" class="text-xl font-bold text-white select-all">------</span>
+                </div>
+            </div>
+
+            <div class="grid grid-cols-2 gap-6 mb-6">
+                <div id="slot-host" class="p-4.5 rounded-xl border border-amber-500/60 bg-amber-500/10 flex flex-col items-center gap-2 shadow-lg">
+                    <span class="text-[10px] font-bold text-amber-400 uppercase tracking-widest px-2.5 py-0.5 bg-amber-500/20 rounded border border-amber-500/60">HOST (Chủ Phòng)</span>
+                    <div id="host-name" class="font-bold text-lg text-amber-200">Đang cập nhật...</div>
+                    <div id="host-hero-name" class="text-xs text-gray-300 font-mono">Tướng: Chưa chọn</div>
+                    <div id="host-status" class="mt-2 text-xs font-bold text-emerald-400 border border-emerald-500/60 px-3 py-1 rounded-full bg-emerald-500/20">SẴN SÀNG</div>
+                </div>
+
+                <div id="slot-guest" class="p-4.5 rounded-xl border border-purple-500/60 bg-purple-500/10 flex flex-col items-center gap-2 shadow-lg">
+                    <span class="text-[10px] font-bold text-purple-400 uppercase tracking-widest px-2.5 py-0.5 bg-purple-500/20 rounded border border-purple-500/60">GUEST (Đồng Đội)</span>
+                    <div id="guest-name" class="font-bold text-lg text-gray-400">Đang chờ người tham gia...</div>
+                    <div id="guest-hero-name" class="text-xs text-gray-400 font-mono">Tướng: --</div>
+                    <div id="guest-status" class="mt-2 text-xs font-bold text-gray-500 border border-gray-600/60 px-3 py-1 rounded-full bg-black/60">CHƯA VÀO PHÒNG</div>
+                </div>
+            </div>
+
+            <div class="flex gap-4">
+                <button onclick="leaveLobby()" class="flex-1 py-3 bg-red-950 hover:bg-red-900 text-red-200 font-bold rounded-xl uppercase tracking-wider text-sm transition-all border border-red-500/50 cursor-pointer shadow-lg">
+                    Rời Phòng
+                </button>
+                <button id="btn-toggle-ready" onclick="toggleGuestReady()" class="flex-1 py-3 bg-purple-600 hover:bg-purple-500 text-white font-bold rounded-xl uppercase tracking-wider text-sm transition-all shadow-lg shadow-purple-600/40 hidden cursor-pointer">
+                    Đổi Sẵn Sàng
+                </button>
+                <button id="btn-start-game" onclick="hostStartOnlineGame()" class="flex-1 py-3 bg-gradient-to-r from-amber-500 to-yellow-500 text-black font-extrabold rounded-xl uppercase tracking-wider text-sm transition-all shadow-lg shadow-amber-500/40 opacity-50 cursor-not-allowed" disabled>
+                    Bắt Đầu Vượt Ải
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- IN-GAME HUD OVERLAY -->
+    <div id="game-hud" class="absolute inset-0 z-10 pointer-events-none hidden">
+        <div id="crosshair"><div id="crosshair-dot"></div></div>
+
+        <!-- STAGE & WAVE DISPLAY (TOP CENTER) -->
+        <div class="absolute top-4 left-1/2 -translate-x-1/2 bg-black/90 backdrop-blur-md border border-amber-500/70 rounded-2xl px-6 py-2.5 text-center shadow-2xl">
+            <div id="hud-stage-title" class="text-amber-400 font-cinzel font-black text-lg tracking-wider">ẢI 1: KHAI MỎ VỰC CỔ</div>
+            <div class="text-xs text-gray-300 font-mono flex items-center justify-center gap-3 mt-0.5">
+                <span>QUÁI CÒN LẠI: <strong id="hud-mobs-left" class="text-red-400">0</strong></span>
+                <span>|</span>
+                <span>ẢI: <strong id="hud-stage-num" class="text-yellow-300">1 / 10</strong></span>
+                <span>|</span>
+                <span>LV: <strong id="hud-player-level" class="text-cyan-300">1</strong></span>
+                <span>|</span>
+                <span>VÀNG: <strong id="hud-player-gold" class="text-amber-400">0G</strong></span>
+            </div>
+        </div>
+
+        <!-- Top Left: Player Status Bar -->
+        <div class="absolute top-16 left-6 flex items-center gap-4">
+            <div class="w-14 h-14 rounded-xl bg-slate-900/95 border-2 border-amber-500 flex items-center justify-center text-amber-400 text-2xl shadow-2xl backdrop-blur-md">
+                <i id="hud-hero-icon" class="fa-solid fa-sword"></i>
+            </div>
+            <div class="flex flex-col gap-1 w-64">
+                <div class="flex justify-between items-center text-xs font-bold">
+                    <span id="hud-hero-name" class="text-amber-300 font-cinzel tracking-wider">KIẾM SĨ</span>
+                    <span id="hud-hp-text" class="text-white font-mono">1800 / 1800</span>
+                </div>
+                <div class="w-full h-3.5 bg-black/85 rounded-full border border-white/20 overflow-hidden p-0.5 shadow-inner">
+                    <div id="hud-hp-bar" class="h-full bg-gradient-to-r from-red-600 via-emerald-500 to-green-400 rounded-full w-full transition-all duration-150"></div>
+                </div>
+                <div id="hud-active-items" class="flex flex-wrap gap-2 text-[10px] text-amber-300 font-mono mt-0.5"></div>
+            </div>
+        </div>
+
+        <!-- Top Right: Teammate Status -->
+        <div class="absolute top-16 right-6 flex flex-col items-end gap-3">
+            <div id="hud-room-tag" class="px-4 py-1.5 bg-black/90 border border-cyan-500/60 rounded-xl text-xs font-mono text-cyan-300 hidden backdrop-blur shadow-lg">
+                MÃ PHÒNG ONLINE: <span id="hud-room-code" class="font-bold text-white text-sm">------</span>
+            </div>
+
+            <div id="hud-ally-container" class="flex items-center gap-4 opacity-95 hidden">
+                <div class="flex flex-col gap-1 w-64 items-end">
+                    <div class="flex justify-between items-center text-xs font-bold w-full">
+                        <span id="hud-ally-hp-text" class="text-white font-mono">1500 / 1500</span>
+                        <span id="hud-ally-name" class="text-cyan-400 font-cinzel tracking-wider">ĐỒNG ĐỘI</span>
+                    </div>
+                    <div class="w-full h-3.5 bg-black/85 rounded-full border border-white/20 overflow-hidden p-0.5 shadow-inner">
+                        <div id="hud-ally-hp-bar" class="h-full bg-gradient-to-r from-cyan-600 to-cyan-400 rounded-full w-full transition-all duration-150"></div>
+                    </div>
+                </div>
+                <div class="w-14 h-14 rounded-xl bg-slate-900/95 border-2 border-cyan-500 flex items-center justify-center text-cyan-400 text-2xl shadow-2xl backdrop-blur-md">
+                    <i id="hud-ally-icon" class="fa-solid fa-user-group"></i>
+                </div>
+            </div>
+        </div>
+
+        <!-- Bottom Center: Skill Bar -->
+        <div class="absolute bottom-8 left-1/2 -translate-x-1/2 flex items-center gap-4 pointer-events-auto">
+            <div class="relative w-16 h-16 rounded-2xl bg-slate-900/95 border border-amber-500/70 flex flex-col items-center justify-center text-amber-400 shadow-2xl overflow-hidden backdrop-blur-md">
+                <div id="cd-q" class="absolute bottom-0 left-0 right-0 bg-black/90 cd-overlay" style="height: 0%;"></div>
+                <i id="skill-icon-q" class="fa-solid fa-sword text-xl"></i>
+                <span id="skill-name-q" class="text-[9px] text-gray-300 mt-1 font-bold">Skill Q</span>
+                <span class="absolute top-1 left-2 font-mono text-[10px] font-bold text-amber-400">Q</span>
+            </div>
+
+            <div class="relative w-16 h-16 rounded-2xl bg-slate-900/95 border border-amber-500/70 flex flex-col items-center justify-center text-amber-400 shadow-2xl overflow-hidden backdrop-blur-md">
+                <div id="cd-e" class="absolute bottom-0 left-0 right-0 bg-black/90 cd-overlay" style="height: 0%;"></div>
+                <i id="skill-icon-e" class="fa-solid fa-person-running text-xl"></i>
+                <span id="skill-name-e" class="text-[9px] text-gray-300 mt-1 font-bold">Skill E</span>
+                <span class="absolute top-1 left-2 font-mono text-[10px] font-bold text-amber-400">E</span>
+            </div>
+
+            <div class="relative w-20 h-20 rounded-2xl bg-slate-900/95 border-2 border-yellow-400 flex flex-col items-center justify-center text-yellow-400 shadow-2xl overflow-hidden backdrop-blur-md">
+                <div id="cd-r" class="absolute bottom-0 left-0 right-0 bg-black/90 cd-overlay" style="height: 0%;"></div>
+                <i id="skill-icon-r" class="fa-solid fa-burst text-2xl"></i>
+                <span id="skill-name-r" class="text-[10px] text-yellow-200 mt-1 font-extrabold uppercase">Tuyệt Kỹ</span>
+                <span class="absolute top-1 left-2 font-mono text-[11px] font-bold text-yellow-300">R</span>
+            </div>
+        </div>
+    </div>
+
+    <!-- MULTI-LEVEL SHOP INTERFACE -->
+    <div id="shop-modal" class="absolute inset-0 z-30 flex items-center justify-center bg-black/90 backdrop-blur-lg hidden pointer-events-auto">
+        <div class="p-6 md:p-8 rounded-2xl glass-panel text-center max-w-5xl w-full mx-4 border border-amber-500/80 shadow-2xl relative max-h-[90vh] overflow-y-auto">
+            <div class="mb-4">
+                <h2 id="shop-title" class="text-2xl md:text-4xl font-extrabold font-cinzel text-amber-400 tracking-wider">
+                    HOÀN THÀNH ẢI - CỬA HÀNG TRANG BỊ
+                </h2>
+                <p class="text-xs text-emerald-300 mt-1 font-semibold uppercase tracking-widest" id="shop-level-up-text">
+                    🎉 BẠN ĐÃ THĂNG LÊN CẤP 2! (+250 MÁU, +15% SÁT THƯƠNG)
+                </p>
+                <div class="mt-2 text-sm text-yellow-300 font-bold font-mono">
+                    SỐ VÀNG CÓ SẴN: <span id="shop-gold-val" class="text-xl text-yellow-400">0</span> G
+                </div>
+            </div>
+
+            <!-- SHOP ITEMS GRID -->
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6 text-left">
+                <!-- Item 1: Giáp Spikes -->
+                <div class="p-4 rounded-xl border border-amber-500/50 bg-black/75 flex flex-col justify-between hover:border-amber-400 transition-all shadow-lg">
+                    <div>
+                        <div class="flex items-center justify-between text-amber-400 font-bold text-base mb-1">
+                            <span class="flex items-center gap-2"><i class="fa-solid fa-shield-halved text-xl"></i> Giáp Gai Spikes</span>
+                            <span id="lvl-SPIKE_ARMOR" class="text-xs bg-amber-500/20 text-amber-300 px-2 py-0.5 rounded border border-amber-500/60">Cấp 0/5</span>
+                        </div>
+                        <p id="desc-SPIKE_ARMOR" class="text-[11px] text-gray-300 mb-2">Tăng Máu tối đa & Phản lại % sát thương khi bị quái đánh.</p>
+                    </div>
+                    <div>
+                        <div id="price-SPIKE_ARMOR" class="text-xs font-mono text-yellow-400 mb-2 font-bold">Giá: 150 Vàng</div>
+                        <button onclick="buyItem('SPIKE_ARMOR')" id="btn-buy-SPIKE_ARMOR" class="w-full py-2 bg-amber-500 hover:bg-amber-400 text-black font-bold text-xs rounded-lg uppercase tracking-wider transition-all cursor-pointer shadow-md">
+                            Nâng Cấp
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Item 2: Drone -->
+                <div class="p-4 rounded-xl border border-cyan-500/50 bg-black/75 flex flex-col justify-between hover:border-cyan-400 transition-all shadow-lg">
+                    <div>
+                        <div class="flex items-center justify-between text-cyan-400 font-bold text-base mb-1">
+                            <span class="flex items-center gap-2"><i class="fa-solid fa-robot text-xl"></i> Máy Trợ Chiến</span>
+                            <span id="lvl-DRONE" class="text-xs bg-cyan-500/20 text-cyan-300 px-2 py-0.5 rounded border border-cyan-500/60">Cấp 0/5</span>
+                        </div>
+                        <p id="desc-DRONE" class="text-[11px] text-gray-300 mb-2">Tăng % Sát Thương toàn chiêu & Hồi máu liên tục mỗi giây.</p>
+                    </div>
+                    <div>
+                        <div id="price-DRONE" class="text-xs font-mono text-yellow-400 mb-2 font-bold">Giá: 200 Vàng</div>
+                        <button onclick="buyItem('DRONE')" id="btn-buy-DRONE" class="w-full py-2 bg-cyan-600 hover:bg-cyan-500 text-white font-bold text-xs rounded-lg uppercase tracking-wider transition-all cursor-pointer shadow-md">
+                            Nâng Cấp
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Item 3: Kiếm Bá Vương -->
+                <div class="p-4 rounded-xl border border-red-500/50 bg-black/75 flex flex-col justify-between hover:border-red-400 transition-all shadow-lg">
+                    <div>
+                        <div class="flex items-center justify-between text-red-400 font-bold text-base mb-1">
+                            <span class="flex items-center gap-2"><i class="fa-solid fa-khanda text-xl"></i> Kiếm Bá Vương</span>
+                            <span id="lvl-SWORD_UPGRADE" class="text-xs bg-red-500/20 text-red-300 px-2 py-0.5 rounded border border-red-500/60">Cấp 0/5</span>
+                        </div>
+                        <p id="desc-SWORD_UPGRADE" class="text-[11px] text-gray-300 mb-2">Tăng trực tiếp Sát Thương Gốc cho toàn bộ đòn tấn công.</p>
+                    </div>
+                    <div>
+                        <div id="price-SWORD_UPGRADE" class="text-xs font-mono text-yellow-400 mb-2 font-bold">Giá: 180 Vàng</div>
+                        <button onclick="buyItem('SWORD_UPGRADE')" id="btn-buy-SWORD_UPGRADE" class="w-full py-2 bg-red-600 hover:bg-red-500 text-white font-bold text-xs rounded-lg uppercase tracking-wider transition-all cursor-pointer shadow-md">
+                            Nâng Cấp
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Item 4: Giày Tốc Độ -->
+                <div class="p-4 rounded-xl border border-purple-500/50 bg-black/75 flex flex-col justify-between hover:border-purple-400 transition-all shadow-lg">
+                    <div>
+                        <div class="flex items-center justify-between text-purple-400 font-bold text-base mb-1">
+                            <span class="flex items-center gap-2"><i class="fa-solid fa-shoe-prints text-xl"></i> Giày Tốc Độ</span>
+                            <span id="lvl-SPEED_BOOTS" class="text-xs bg-purple-500/20 text-purple-300 px-2 py-0.5 rounded border border-purple-500/60">Cấp 0/5</span>
+                        </div>
+                        <p id="desc-SPEED_BOOTS" class="text-[11px] text-gray-300 mb-2">Tăng Tốc Độ Di Chuyển & Giảm thời gian hồi chiêu kỹ năng.</p>
+                    </div>
+                    <div>
+                        <div id="price-SPEED_BOOTS" class="text-xs font-mono text-yellow-400 mb-2 font-bold">Giá: 120 Vàng</div>
+                        <button onclick="buyItem('SPEED_BOOTS')" id="btn-buy-SPEED_BOOTS" class="w-full py-2 bg-purple-600 hover:bg-purple-500 text-white font-bold text-xs rounded-lg uppercase tracking-wider transition-all cursor-pointer shadow-md">
+                            Nâng Cấp
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Item 5: Thuốc Máu -->
+                <div class="p-4 rounded-xl border border-emerald-500/50 bg-black/75 flex flex-col justify-between hover:border-emerald-400 transition-all md:col-span-2 shadow-lg">
+                    <div>
+                        <div class="flex items-center justify-between text-emerald-400 font-bold text-base mb-1">
+                            <span class="flex items-center gap-2"><i class="fa-solid fa-flask text-xl"></i> Thần Dược Máu Tức Thời</span>
+                            <span class="text-xs bg-emerald-500/20 text-emerald-300 px-2 py-0.5 rounded border border-emerald-500/60">Không Giới Hạn</span>
+                        </div>
+                        <p class="text-[11px] text-gray-300 mb-2">Hồi phục 100% Thanh Máu ngay lập tức để chuẩn bị bước vào cửa ải tiếp theo.</p>
+                    </div>
+                    <div>
+                        <div class="text-xs font-mono text-yellow-400 mb-2 font-bold">Giá: 80 Vàng</div>
+                        <button onclick="buyItem('HEALTH_POTION')" class="w-full py-2 bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs rounded-lg uppercase tracking-wider transition-all cursor-pointer shadow-md">
+                            Mua Thuốc Máu
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- ONLINE STATUS -->
+            <div id="shop-online-status-bar" class="mb-4 text-xs font-mono text-cyan-300 bg-black/75 py-2.5 px-4 rounded-xl border border-cyan-500/50 hidden flex justify-between items-center shadow-inner">
+                <span>Trạng thái phòng Online:</span>
+                <span id="shop-online-ready-text" class="text-yellow-400 font-bold">Đang chờ cả 2 người hoàn tất nâng cấp đồ...</span>
+            </div>
+
+            <button onclick="finishShoppingAndNextStage()" id="btn-finish-shop" class="w-full py-3.5 bg-gradient-to-r from-emerald-500 to-green-500 text-black font-extrabold text-base rounded-xl uppercase tracking-wider transition-all shadow-lg shadow-emerald-500/40 cursor-pointer">
+                MUA XONG - TIẾP TỤC SANG ẢI TIẾP THEO
+            </button>
+        </div>
+    </div>
+
+    <!-- GAME OVER MODAL -->
+    <div id="game-over-modal" class="absolute inset-0 z-30 flex items-center justify-center bg-black/90 backdrop-blur-md hidden pointer-events-auto">
+        <div class="p-8 rounded-2xl glass-panel text-center max-w-sm w-full border border-amber-500/70 shadow-2xl">
+            <h2 id="game-over-title" class="text-4xl font-extrabold font-cinzel text-amber-400 mb-2">CHIẾN THẮNG!</h2>
+            <p id="game-over-desc" class="text-xs text-gray-300 mb-6">Bạn đã hoàn thành các thử thách!</p>
+            <button onclick="returnToMenu()" class="w-full py-3 bg-amber-500 hover:bg-amber-400 text-black font-bold rounded-xl uppercase tracking-wider transition-colors shadow-lg shadow-amber-500/40 cursor-pointer">
+                Quay Về Menu
+            </button>
+        </div>
+    </div>
+
+    <!-- MAIN GAME LOGIC (ENHANCED GRAPHICS, ANIMATED GRASS & UNIQUE VFX) -->
+    <script>
+        /* ----------------------------------------------------
+           1. HERO & EXTENDED 10 STAGES CONFIGURATIONS
+        ---------------------------------------------------- */
+        const HERO_TYPES = {
+            WARRIOR: {
+                name: 'Kiếm Sĩ Hoàng Gia',
+                icon: 'fa-sword',
+                color: 0x3b82f6,
+                hp: 1800,
+                speed: 16,
+                skills: {
+                    Q: { name: 'Sóng Kiếm Hoàng Gia', cd: 1800, damage: 380, icon: 'fa-sword' },
+                    E: { name: 'Lướt Trảm Kiếm', cd: 3500, damage: 450, icon: 'fa-person-running' },
+                    R: { name: 'Phong Ma Vũ Trảm', cd: 7500, damage: 1200, icon: 'fa-burst' }
+                }
+            },
+            ARCHER: {
+                name: 'Cung Thủ Tiên Tộc',
+                icon: 'fa-bow-arrow',
+                color: 0x10b981,
+                hp: 1200,
+                speed: 18,
+                skills: {
+                    Q: { name: 'Mưa Tên Thần', cd: 2200, damage: 320, icon: 'fa-arrows-to-dot' },
+                    E: { name: 'Bắn Tốc Độ', cd: 3200, damage: 420, icon: 'fa-feather' },
+                    R: { name: 'Tên Thần Xuyên Thấu', cd: 7000, damage: 1100, icon: 'fa-crosshairs' }
+                }
+            },
+            GUNNER: {
+                name: 'Xạ Thủ Plasma',
+                icon: 'fa-gun',
+                color: 0xef4444,
+                hp: 1150,
+                speed: 17,
+                skills: {
+                    Q: { name: 'Lựu Đạn Plasma', cd: 2500, damage: 360, icon: 'fa-bomb' },
+                    E: { name: 'Xả Đạn Liên Thanh', cd: 3800, damage: 480, icon: 'fa-bars-staggered' },
+                    R: { name: 'Tên Lửa Diệt Chủng', cd: 8000, damage: 1350, icon: 'fa-rocket' }
+                }
+            },
+            MAGE: {
+                name: 'Pháp Sư Tinh Tú',
+                icon: 'fa-wand-magic-sparkles',
+                color: 0xa855f7,
+                hp: 1100,
+                speed: 15,
+                skills: {
+                    Q: { name: 'Cầu Lửa Siêu Nổ', cd: 2000, damage: 400, icon: 'fa-fire-flame-curved' },
+                    E: { name: 'Bão Sấm Sét', cd: 4500, damage: 550, icon: 'fa-bolt-lightning' },
+                    R: { name: 'Hố Đen Vũ Trụ', cd: 8500, damage: 1500, icon: 'fa-atom' }
+                }
+            }
+        };
+
+        const STAGES = [
+            { id: 1, title: 'ẢI 1: KHAI MỎ VỰC CỔ', mobCount: 6, mobHp: 500, mobDmg: 40, speed: 9, attackType: 'MELEE', goldReward: 160, isBossStage: false },
+            { id: 2, title: 'ẢI 2: RỪNG SƯƠNG BỎ HOÁNG', mobCount: 8, mobHp: 850, speed: 11, mobDmg: 55, attackType: 'RANGED', goldReward: 200, isBossStage: false },
+            { id: 3, title: 'ẢI 3: THÁP CỔ AETHER', mobCount: 10, mobHp: 1300, speed: 12, mobDmg: 70, attackType: 'MAGIC', goldReward: 240, isBossStage: false },
+            { id: 4, title: 'ẢI 4: VỆ BINH CỔ ĐẠI (MINI BOSS)', mobCount: 2, mobHp: 2800, speed: 13, mobDmg: 90, attackType: 'BOSS', goldReward: 320, isBossStage: true },
+            { id: 5, title: 'ẢI 5: ĐỘNG QUỶ TINH TÚ', mobCount: 12, mobHp: 1900, speed: 13, mobDmg: 105, attackType: 'MIXED', goldReward: 380, isBossStage: false },
+            { id: 6, title: 'ẢI 6: HẺM NÚI LỬA DIỆT VON', mobCount: 14, mobHp: 2600, speed: 14, mobDmg: 120, attackType: 'MELEE', goldReward: 450, isBossStage: false },
+            { id: 7, title: 'ẢI 7: HANG BĂNG BỎ BỎNG', mobCount: 15, mobHp: 3400, speed: 14, mobDmg: 140, attackType: 'RANGED', goldReward: 520, isBossStage: false },
+            { id: 8, title: 'ẢI 8: TỬ THẦN BÓNG ĐÊM (MINI BOSS)', mobCount: 2, mobHp: 6000, speed: 15, mobDmg: 170, attackType: 'BOSS', goldReward: 650, isBossStage: true },
+            { id: 9, title: 'ẢI 9: VƯƠNG QUỐC BẠO CHÚA', mobCount: 18, mobHp: 4800, speed: 15, mobDmg: 200, attackType: 'MIXED', goldReward: 800, isBossStage: false },
+            { id: 10, title: 'ẢI CUỐI: TRÙM MA VƯƠNG TỐI CAO', mobCount: 1, mobHp: 16000, speed: 16, mobDmg: 260, attackType: 'BOSS', goldReward: 1200, isBossStage: true }
+        ];
+
+        const SHOP_ITEMS = {
+            SPIKE_ARMOR: {
+                name: 'Giáp Gai Spikes',
+                maxLevel: 5,
+                basePrice: 150,
+                priceScale: 1.5,
+                getStats: (lvl) => ({ hpBonus: lvl * 350, reflectPct: lvl * 0.12 })
+            },
+            DRONE: {
+                name: 'Máy Trợ Chiến',
+                maxLevel: 5,
+                basePrice: 200,
+                priceScale: 1.6,
+                getStats: (lvl) => ({ dmgMult: lvl * 0.25, healPerSec: lvl * 20 })
+            },
+            SWORD_UPGRADE: {
+                name: 'Kiếm Bá Vương',
+                maxLevel: 5,
+                basePrice: 180,
+                priceScale: 1.5,
+                getStats: (lvl) => ({ flatDmg: lvl * 130 })
+            },
+            SPEED_BOOTS: {
+                name: 'Giày Tốc Độ',
+                maxLevel: 5,
+                basePrice: 120,
+                priceScale: 1.4,
+                getStats: (lvl) => ({ speedBonus: lvl * 2.0, cdReduction: lvl * 0.08 })
+            },
+            HEALTH_POTION: { name: 'Thần Dược Máu', price: 80 }
+        };
+
+        let currentStageIndex = 0;
+        let activeMobs = [];
+
+        // Engine State Variables
+        let scene, camera, renderer;
+        let selectedHeroKey = 'WARRIOR';
+        let gameMode = 'VS_AI';
+        let isGameRunning = false;
+        let isPaused = false;
+        let isShopping = false;
+        let lastFrameTime = performance.now();
+        let frameCount = 0;
+        let fpsTimer = performance.now();
+
+        // 3D Aiming Orbit Camera Controls
+        let camPitch = 0.25;
+        let camYaw = 0;
+        let camDistance = 7.5;
+        let camRightOffset = 1.8;
+
+        // Player Structure
+        let player = {
+            mesh: null,
+            swordMesh: null,
+            droneMesh: null,
+            type: 'WARRIOR',
+            level: 1,
+            gold: 0,
+            hp: 1800,
+            maxHp: 1800,
+            baseSpeed: 16,
+            itemLevels: {
+                SPIKE_ARMOR: 0,
+                DRONE: 0,
+                SWORD_UPGRADE: 0,
+                SPEED_BOOTS: 0
+            },
+            pos: new THREE.Vector3(0, 0, 0),
+            rotY: 0,
+            vy: 0,
+            isGrounded: true,
+            isAttacking: false,
+            attackSwingAnim: 0,
+            cdQ: 0, cdE: 0, cdR: 0
+        };
+
+        let teammate = {
+            mesh: null,
+            swordMesh: null,
+            type: 'MAGE',
+            hp: 1500,
+            maxHp: 1500,
+            pos: new THREE.Vector3(3, 0, 3),
+            rotY: 0
+        };
+
+        let projectiles = [];
+        let particleEffects = [];
+        let grassInstances = [];
+        let clock = new THREE.Clock();
+
+        const keys = { w: false, a: false, s: false, d: false, space: false, shift: false };
+        let mouseLocked = false;
+
+        // Multiplayer States
+        let playerNickname = 'Chiến Binh Aether';
+        let peer = null;
+        let activePeerConn = null;
+        let roomCode = '';
+        let isHost = false;
+
+        let lobbyState = {
+            hostName: '',
+            hostHero: 'WARRIOR',
+            hostReady: true,
+            guestName: '',
+            guestHero: 'MAGE',
+            guestReady: false,
+            guestConnected: false
+        };
+
+        let shopReadyState = { hostDone: false, guestDone: false };
+
+        /* ----------------------------------------------------
+           2. MAP, TERRAIN, PROCEDURAL TREES & ANIMATED GRASS
+        ---------------------------------------------------- */
+        function getTerrainHeight(x, z) {
+            return Math.sin(x * 0.05) * Math.cos(z * 0.05) * 2.0 + Math.sin(x * 0.02 + z * 0.03) * 3.0;
+        }
+
+        function createTerrainMap() {
+            const size = 340;
+            const segments = 180;
+            const geometry = new THREE.PlaneGeometry(size, size, segments, segments);
+            geometry.rotateX(-Math.PI / 2);
+
+            const posAttr = geometry.attributes.position;
+            const colors = [];
+            const col1 = new THREE.Color(0x0f172a);
+            const col2 = new THREE.Color(0x020617);
+            const col3 = new THREE.Color(0x1e293b);
+
+            for (let i = 0; i < posAttr.count; i++) {
+                const x = posAttr.getX(i);
+                const z = posAttr.getZ(i);
+                const h = getTerrainHeight(x, z);
+                posAttr.setY(i, h);
+
+                const mixCol = h > 1.8 ? col3 : (h < -0.6 ? col2 : col1);
+                colors.push(mixCol.r, mixCol.g, mixCol.b);
+            }
+            geometry.setAttribute('color', new THREE.Float32BufferAttribute(colors, 3));
+            geometry.computeVertexNormals();
+
+            const terrainMat = new THREE.MeshStandardMaterial({
+                vertexColors: true,
+                roughness: 0.6,
+                metalness: 0.4
+            });
+
+            const terrain = new THREE.Mesh(geometry, terrainMat);
+            terrain.receiveShadow = true;
+            scene.add(terrain);
+
+            // Detailed Styled Trees
+            const trunkGeo = new THREE.CylinderGeometry(0.4, 0.7, 3.5, 7);
+            const trunkMat = new THREE.MeshStandardMaterial({ color: 0x451a03, roughness: 0.8 });
+            
+            const leavesGeo = new THREE.ConeGeometry(2.2, 4.5, 7);
+            const leavesMat = new THREE.MeshStandardMaterial({ color: 0x065f46, roughness: 0.5, metalness: 0.2 });
+
+            const crystalGeo = new THREE.OctahedronGeometry(1.4, 0);
+            const crystalMat = new THREE.MeshStandardMaterial({ 
+                color: 0x38bdf8, 
+                emissive: 0x0284c7, 
+                emissiveIntensity: 1.2,
+                roughness: 0.1, 
+                metalness: 0.98 
+            });
+
+            for (let i = 0; i < 90; i++) {
+                const rx = (Math.random() - 0.5) * 280;
+                const rz = (Math.random() - 0.5) * 280;
+                const ry = getTerrainHeight(rx, rz);
+
+                if (i % 3 === 0) {
+                    const crystal = new THREE.Mesh(crystalGeo, crystalMat);
+                    crystal.position.set(rx, ry + 1.4, rz);
+                    crystal.rotation.set(Math.random(), Math.random(), Math.random());
+                    crystal.scale.set(0.9, 2.2 + Math.random() * 1.8, 0.9);
+                    crystal.castShadow = true;
+                    scene.add(crystal);
+                } else if (i % 2 === 0) {
+                    const treeGroup = new THREE.Group();
+                    const trunk = new THREE.Mesh(trunkGeo, trunkMat);
+                    trunk.position.y = 1.75;
+                    trunk.castShadow = true;
+                    treeGroup.add(trunk);
+
+                    const leaves = new THREE.Mesh(leavesGeo, leavesMat);
+                    leaves.position.y = 4.2;
+                    leaves.castShadow = true;
+                    treeGroup.add(leaves);
+
+                    treeGroup.position.set(rx, ry, rz);
+                    const scale = 0.7 + Math.random() * 0.9;
+                    treeGroup.scale.set(scale, scale, scale);
+                    scene.add(treeGroup);
+                }
+            }
+
+            // Instanced Dynamic Grass (Lush & Animated)
+            const grassBladeGeo = new THREE.ConeGeometry(0.12, 1.2, 4);
+            grassBladeGeo.translate(0, 0.6, 0);
+            const grassBladeMat = new THREE.MeshStandardMaterial({ 
+                color: 0x10b981, 
+                roughness: 0.5,
+                side: THREE.DoubleSide 
+            });
+
+            const grassCount = 1200;
+            const instancedGrass = new THREE.InstancedMesh(grassBladeGeo, grassBladeMat, grassCount);
+            instancedGrass.castShadow = true;
+            instancedGrass.receiveShadow = true;
+
+            const dummy = new THREE.Object3D();
+            for (let i = 0; i < grassCount; i++) {
+                const gx = (Math.random() - 0.5) * 300;
+                const gz = (Math.random() - 0.5) * 300;
+                const gy = getTerrainHeight(gx, gz);
+                
+                dummy.position.set(gx, gy, gz);
+                dummy.scale.set(0.7 + Math.random() * 0.6, 0.7 + Math.random() * 0.8, 0.7 + Math.random() * 0.6);
+                dummy.rotation.y = Math.random() * Math.PI * 2;
+                dummy.updateMatrix();
+                instancedGrass.setMatrixAt(i, dummy.matrix);
+            }
+            instancedGrass.instanceMatrix.needsUpdate = true;
+            scene.add(instancedGrass);
+            grassInstances.push(instancedGrass);
+        }
+
+        /* ----------------------------------------------------
+           3. THREE.JS SCENE INITIALIZATION
+        ---------------------------------------------------- */
+        function initThreeScene() {
+            const container = document.getElementById('canvas-container');
+            
+            scene = new THREE.Scene();
+            scene.background = new THREE.Color(0x020617);
+            scene.fog = new THREE.FogExp2(0x020617, 0.0065);
+
+            camera = new THREE.PerspectiveCamera(62, window.innerWidth / window.innerHeight, 0.1, 600);
+
+            renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: "high-performance" });
+            renderer.setSize(window.innerWidth, window.innerHeight);
+            renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+            renderer.shadowMap.enabled = true;
+            renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+            renderer.toneMapping = THREE.ACESFilmicToneMapping;
+            renderer.toneMappingExposure = 1.5;
+            container.appendChild(renderer.domElement);
+
+            const ambientLight = new THREE.AmbientLight(0x64748b, 0.9);
+            scene.add(ambientLight);
+
+            const sunLight = new THREE.DirectionalLight(0xfffbeb, 2.8);
+            sunLight.position.set(120, 180, 90);
+            sunLight.castShadow = true;
+            sunLight.shadow.mapSize.width = 2048;
+            sunLight.shadow.mapSize.height = 2048;
+            sunLight.shadow.camera.near = 10;
+            sunLight.shadow.camera.far = 350;
+            const d = 130;
+            sunLight.shadow.camera.left = -d;
+            sunLight.shadow.camera.right = d;
+            sunLight.shadow.camera.top = d;
+            sunLight.shadow.camera.bottom = -d;
+            scene.add(sunLight);
+
+            const skyLight = new THREE.HemisphereLight(0x38bdf8, 0x047857, 0.8);
+            scene.add(skyLight);
+
+            createTerrainMap();
+
+            window.addEventListener('resize', onWindowResize);
+            setupControls();
+        }
+
+        function onWindowResize() {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+        }
+
+        /* ----------------------------------------------------
+           4. HIGH-DETAIL DETAILED HERO MODELS
+        ---------------------------------------------------- */
+        function createHeroMesh(type) {
+            const group = new THREE.Group();
+            const config = HERO_TYPES[type] || HERO_TYPES.WARRIOR;
+            
+            const mat = new THREE.MeshStandardMaterial({ 
+                color: config.color, 
+                roughness: 0.2, 
+                metalness: 0.9,
+                emissive: config.color,
+                emissiveIntensity: 0.2
+            });
+
+            // Detailed Torso with layered armor
+            const bodyGeo = new THREE.CylinderGeometry(0.42, 0.28, 1.6, 20);
+            const body = new THREE.Mesh(bodyGeo, mat);
+            body.position.y = 0.8;
+            body.castShadow = true;
+            group.add(body);
+
+            const chestPlateGeo = new THREE.BoxGeometry(0.7, 0.8, 0.5);
+            const chestMat = new THREE.MeshStandardMaterial({ color: 0x0f172a, metalness: 0.95, roughness: 0.15 });
+            const chestPlate = new THREE.Mesh(chestPlateGeo, chestMat);
+            chestPlate.position.set(0, 1.0, 0.05);
+            chestPlate.castShadow = true;
+            group.add(chestPlate);
+
+            const headGeo = new THREE.SphereGeometry(0.35, 20, 20);
+            const headMat = new THREE.MeshStandardMaterial({ color: 0xfef08a, metalness: 0.5, roughness: 0.2 });
+            const head = new THREE.Mesh(headGeo, headMat);
+            head.position.y = 1.9;
+            head.castShadow = true;
+            group.add(head);
+
+            // Crown / Helmet accent
+            const crownGeo = new THREE.ConeGeometry(0.25, 0.4, 6);
+            const crownMat = new THREE.MeshStandardMaterial({ color: 0xfacc15, metalness: 0.9, roughness: 0.1 });
+            const crown = new THREE.Mesh(crownGeo, crownMat);
+            crown.position.y = 2.2;
+            group.add(crown);
+
+            let weaponMeshRef = null;
+
+            if (type === 'WARRIOR') {
+                const swordGroup = new THREE.Group();
+                const bladeGeo = new THREE.BoxGeometry(0.15, 2.0, 0.35);
+                const bladeMat = new THREE.MeshStandardMaterial({ 
+                    color: 0x93c5fd, 
+                    emissive: 0x3b82f6,
+                    emissiveIntensity: 1.2,
+                    metalness: 0.98, 
+                    roughness: 0.05 
+                });
+                const blade = new THREE.Mesh(bladeGeo, bladeMat);
+                blade.position.y = 1.0;
+                blade.castShadow = true;
+                swordGroup.add(blade);
+
+                const guardGeo = new THREE.BoxGeometry(0.7, 0.1, 0.15);
+                const guardMat = new THREE.MeshStandardMaterial({ color: 0xfacc15, metalness: 0.95 });
+                const guard = new THREE.Mesh(guardGeo, guardMat);
+                guard.position.y = 0.1;
+                swordGroup.add(guard);
+
+                swordGroup.position.set(0.6, 1.0, 0.15);
+                swordGroup.rotation.set(0.2, 0, -0.2);
+                group.add(swordGroup);
+                weaponMeshRef = swordGroup;
+            } else if (type === 'GUNNER') {
+                const gunGeo = new THREE.BoxGeometry(0.25, 0.25, 1.1);
+                const gunMat = new THREE.MeshStandardMaterial({ color: 0x1e293b, metalness: 0.95, roughness: 0.1 });
+                const gun = new THREE.Mesh(gunGeo, gunMat);
+                gun.position.set(0.5, 1.05, -0.4);
+                gun.castShadow = true;
+                group.add(gun);
+                weaponMeshRef = gun;
+            } else if (type === 'MAGE') {
+                const staffGeo = new THREE.CylinderGeometry(0.05, 0.05, 2.5);
+                const staffMat = new THREE.MeshStandardMaterial({ color: 0x451a03, roughness: 0.5 });
+                const staff = new THREE.Mesh(staffGeo, staffMat);
+                staff.position.set(0.5, 1.05, -0.2);
+                
+                const orbGeo = new THREE.SphereGeometry(0.28, 18, 18);
+                const orbMat = new THREE.MeshStandardMaterial({ color: 0xd8b4fe, emissive: 0xa855f7, emissiveIntensity: 2.0, roughness: 0.1 });
+                const orb = new THREE.Mesh(orbGeo, orbMat);
+                orb.position.set(0.5, 2.35, -0.2);
+                
+                group.add(staff);
+                group.add(orb);
+                weaponMeshRef = orb;
+            } else if (type === 'ARCHER') {
+                const bowGeo = new THREE.TorusGeometry(0.75, 0.05, 12, 24, Math.PI);
+                const bowMat = new THREE.MeshStandardMaterial({ color: 0x16a34a, metalness: 0.5, roughness: 0.2 });
+                const bow = new THREE.Mesh(bowGeo, bowMat);
+                bow.position.set(0.5, 1.05, -0.2);
+                bow.castShadow = true;
+                group.add(bow);
+                weaponMeshRef = bow;
+            }
+
+            return { group, swordMesh: weaponMeshRef };
+        }
+
+        function createDroneMesh() {
+            const droneGroup = new THREE.Group();
+            const bodyGeo = new THREE.OctahedronGeometry(0.4, 0);
+            const bodyMat = new THREE.MeshStandardMaterial({ color: 0x22d3ee, emissive: 0x06b6d4, emissiveIntensity: 2.0, metalness: 0.95, roughness: 0.1 });
+            const body = new THREE.Mesh(bodyGeo, bodyMat);
+            droneGroup.add(body);
+
+            const ringGeo = new THREE.TorusGeometry(0.6, 0.04, 12, 24);
+            const ringMat = new THREE.MeshBasicMaterial({ color: 0xa5f3fc });
+            const ring = new THREE.Mesh(ringGeo, ringMat);
+            ring.rotation.x = Math.PI / 2;
+            droneGroup.add(ring);
+
+            return droneGroup;
+        }
+
+        /* ----------------------------------------------------
+           5. CONTROLS & CAMERA
+        ---------------------------------------------------- */
+        function setupControls() {
+            window.addEventListener('keydown', (e) => {
+                const k = e.key.toLowerCase();
+                if (k === 'w') keys.w = true;
+                if (k === 'a') keys.a = true;
+                if (k === 's') keys.s = true;
+                if (k === 'd') keys.d = true;
+                if (e.code === 'Space') keys.space = true;
+                if (e.key === 'Shift') keys.shift = true;
+
+                if (isGameRunning && !isPaused && !isShopping) {
+                    if (k === 'q') triggerSkill('Q');
+                    if (k === 'e') triggerSkill('E');
+                    if (k === 'r') triggerSkill('R');
+                }
+
+                if (e.key === 'Escape') togglePauseMenu();
+            });
+
+            window.addEventListener('keyup', (e) => {
+                const k = e.key.toLowerCase();
+                if (k === 'w') keys.w = false;
+                if (k === 'a') keys.a = false;
+                if (k === 's') keys.s = false;
+                if (k === 'd') keys.d = false;
+                if (e.code === 'Space') keys.space = false;
+                if (e.key === 'Shift') keys.shift = false;
+            });
+
+            window.addEventListener('mousedown', (e) => {
+                if (isGameRunning && !isPaused && !isShopping && e.button === 0) {
+                    if (!mouseLocked) {
+                        document.body.requestPointerLock();
+                    } else {
+                        triggerBasicAttack();
+                    }
+                }
+            });
+
+            window.addEventListener('mousemove', (e) => {
+                if (document.pointerLockElement === document.body) {
+                    mouseLocked = true;
+                    camYaw -= e.movementX * 0.003;
+                    camPitch += e.movementY * 0.003;
+                    camPitch = Math.max(-0.35, Math.min(1.2, camPitch));
+                } else {
+                    mouseLocked = false;
+                }
+            });
+        }
+
+        function updatePlayerMovement(delta) {
+            if (!player.mesh) return;
+
+            const speedLvl = player.itemLevels.SPEED_BOOTS;
+            const bootsBonus = SHOP_ITEMS.SPEED_BOOTS.getStats(speedLvl).speedBonus;
+            const speed = (player.baseSpeed + bootsBonus) * (keys.shift ? 1.5 : 1.0);
+            
+            const moveDir = new THREE.Vector3();
+
+            if (keys.w) moveDir.z -= 1;
+            if (keys.s) moveDir.z += 1;
+            if (keys.a) moveDir.x -= 1;
+            if (keys.d) moveDir.x += 1;
+
+            if (moveDir.lengthSq() > 0) {
+                moveDir.normalize();
+                moveDir.applyAxisAngle(new THREE.Vector3(0, 1, 0), camYaw);
+                player.pos.addScaledVector(moveDir, speed * delta);
+            }
+
+            player.rotY = camYaw + Math.PI;
+
+            if (keys.space && player.isGrounded) {
+                player.vy = 12;
+                player.isGrounded = false;
+            }
+
+            player.vy -= 28 * delta;
+            player.pos.y += player.vy * delta;
+
+            const groundY = getTerrainHeight(player.pos.x, player.pos.z);
+            if (player.pos.y <= groundY) {
+                player.pos.y = groundY;
+                player.vy = 0;
+                player.isGrounded = true;
+            }
+
+            player.mesh.position.copy(player.pos);
+            player.mesh.rotation.y = player.rotY;
+
+            // DRONE ITEM POSITIONING & HEALING
+            if (player.itemLevels.DRONE > 0 && player.droneMesh) {
+                const time = Date.now() * 0.003;
+                player.droneMesh.position.set(
+                    player.pos.x + Math.sin(time) * 1.6,
+                    player.pos.y + 2.2 + Math.cos(time * 1.5) * 0.3,
+                    player.pos.z + Math.cos(time) * 1.6
+                );
+                player.droneMesh.rotation.y += delta * 3.0;
+
+                const healPerSec = SHOP_ITEMS.DRONE.getStats(player.itemLevels.DRONE).healPerSec;
+                if (player.hp < player.maxHp) {
+                    player.hp = Math.min(player.maxHp, player.hp + healPerSec * delta);
+                    updatePlayerHUD();
+                }
+            }
+
+            // Sword Swing Animation
+            if (player.type === 'WARRIOR' && player.swordMesh) {
+                if (player.isAttacking) {
+                    player.attackSwingAnim += delta * 15;
+                    player.swordMesh.rotation.x = Math.sin(player.attackSwingAnim) * 2.2;
+                    player.swordMesh.rotation.z = -Math.cos(player.attackSwingAnim) * 1.5;
+                    if (player.attackSwingAnim >= Math.PI) {
+                        player.isAttacking = false;
+                        player.attackSwingAnim = 0;
+                    }
+                } else {
+                    player.swordMesh.rotation.set(0.2, 0, -0.2);
+                }
+            }
+
+            // Camera Over-the-shoulder
+            const forwardX = Math.sin(camYaw);
+            const forwardZ = Math.cos(camYaw);
+            const rightX = Math.cos(camYaw);
+            const rightZ = -Math.sin(camYaw);
+
+            let camX = player.pos.x + camDistance * forwardX * Math.cos(camPitch);
+            let camY = player.pos.y + 1.8 + camDistance * Math.sin(camPitch);
+            let camZ = player.pos.z + camDistance * forwardZ * Math.cos(camPitch);
+
+            camX += rightX * camRightOffset;
+            camZ += rightZ * camRightOffset;
+
+            const targetX = player.pos.x + rightX * (camRightOffset * 0.4);
+            const targetY = player.pos.y + 1.6 - Math.sin(camPitch) * 2.0;
+            const targetZ = player.pos.z + rightZ * (camRightOffset * 0.4);
+
+            camera.position.set(camX, camY, camZ);
+            camera.lookAt(targetX, targetY, targetZ);
+        }
+
+        /* ----------------------------------------------------
+           6. UNIQUE SKILL VFX (KIẾM SĨ, CUNG THỦ, XẠ THỦ, PHÁP SƯ)
+        ---------------------------------------------------- */
+        function get3DAimingVector() {
+            const dir = new THREE.Vector3();
+            camera.getWorldDirection(dir);
+            return dir;
+        }
+
+        function createUniqueSkillVFX(pos, dir, heroType, skillKey) {
+            if (heroType === 'WARRIOR') {
+                // Sóng chém hình cung ánh sáng xanh dương
+                const arcGeo = new THREE.RingGeometry(1.0, 2.6, 22, 1, 0, Math.PI * 0.8);
+                const arcMat = new THREE.MeshBasicMaterial({ color: 0x38bdf8, side: THREE.DoubleSide, transparent: true, opacity: 1.0 });
+                const slash = new THREE.Mesh(arcGeo, arcMat);
+                slash.position.copy(pos).add(dir.clone().multiplyScalar(1.4));
+                slash.quaternion.setFromUnitVectors(new THREE.Vector3(0, 0, 1), dir.clone().normalize());
+                scene.add(slash);
+
+                let op = 1.0;
+                const tm = setInterval(() => {
+                    op -= 0.12;
+                    slash.scale.addScalar(0.12);
+                    arcMat.opacity = op;
+                    if (op <= 0) { clearInterval(tm); scene.remove(slash); }
+                }, 25);
+            } else if (heroType === 'ARCHER') {
+                // Vòng xoáy mũi tên ngọc lục bảo rực rỡ
+                const ringGeo = new THREE.RingGeometry(0.5, 1.8, 16);
+                const ringMat = new THREE.MeshBasicMaterial({ color: 0x34d399, side: THREE.DoubleSide, transparent: true, opacity: 0.9 });
+                const ring = new THREE.Mesh(ringGeo, ringMat);
+                ring.position.copy(pos);
+                ring.rotation.x = Math.PI / 2;
+                scene.add(ring);
+
+                let sc = 0.5;
+                const tm2 = setInterval(() => {
+                    sc += 0.2;
+                    ring.scale.set(sc, sc, sc);
+                    ringMat.opacity -= 0.1;
+                    if (ringMat.opacity <= 0) { clearInterval(tm2); scene.remove(ring); }
+                }, 30);
+            } else if (heroType === 'GUNNER') {
+                // Vụ nổ plasma dung nham đỏ rực
+                const expGeo = new THREE.SphereGeometry(1.5, 16, 16);
+                const expMat = new THREE.MeshBasicMaterial({ color: 0xef4444, transparent: true, opacity: 0.8 });
+                const exp = new THREE.Mesh(expGeo, expMat);
+                exp.position.copy(pos);
+                scene.add(exp);
+
+                let sc2 = 0.5;
+                const tm3 = setInterval(() => {
+                    sc2 += 0.25;
+                    exp.scale.set(sc2, sc2, sc2);
+                    expMat.opacity -= 0.15;
+                    if (expMat.opacity <= 0) { clearInterval(tm3); scene.remove(exp); }
+                }, 25);
+            } else if (heroType === 'MAGE') {
+                // Hố đen năng lượng tím huyền bí (Black Hole vortex)
+                const torusGeo = new THREE.TorusGeometry(2.0, 0.15, 16, 32);
+                const torusMat = new THREE.MeshBasicMaterial({ color: 0xc084fc, transparent: true, opacity: 0.9 });
+                const vortex = new THREE.Mesh(torusGeo, torusMat);
+                vortex.position.copy(pos);
+                vortex.rotation.x = Math.PI / 2;
+                scene.add(vortex);
+
+                let rot = 0;
+                const tm4 = setInterval(() => {
+                    rot += 0.2;
+                    vortex.rotation.z = rot;
+                    vortex.scale.multiplyScalar(0.92);
+                    torusMat.opacity -= 0.1;
+                    if (torusMat.opacity <= 0) { clearInterval(tm4); scene.remove(vortex); }
+                }, 30);
+            }
+        }
+
+        function spawnProjectile(startPos, dir, heroType, skillKey, isFromPlayer = true) {
+            let pGeo, pMat;
+            const baseSkillDmg = HERO_TYPES[heroType].skills[skillKey]?.damage || 250;
+            
+            let calculatedDmg = baseSkillDmg;
+            if (isFromPlayer) {
+                const flatDmg = SHOP_ITEMS.SWORD_UPGRADE.getStats(player.itemLevels.SWORD_UPGRADE).flatDmg;
+                const droneMult = SHOP_ITEMS.DRONE.getStats(player.itemLevels.DRONE).dmgMult;
+                const levelMult = 1 + (player.level - 1) * 0.15;
+
+                calculatedDmg = (baseSkillDmg + flatDmg) * (1 + droneMult) * levelMult;
+            }
+
+            if (heroType === 'WARRIOR') {
+                pGeo = new THREE.BoxGeometry(2.8, 0.3, 1.0);
+                pMat = new THREE.MeshStandardMaterial({ color: 0x38bdf8, emissive: 0x0284c7, emissiveIntensity: 2.8, roughness: 0.1 });
+                if (isFromPlayer) createUniqueSkillVFX(startPos, dir, heroType, skillKey);
+            } else if (heroType === 'ARCHER') {
+                pGeo = new THREE.ConeGeometry(0.22, 2.0, 10);
+                pGeo.rotateX(Math.PI / 2);
+                pMat = new THREE.MeshStandardMaterial({ color: 0x34d399, emissive: 0x059669, emissiveIntensity: 2.5, roughness: 0.1 });
+                if (isFromPlayer) createUniqueSkillVFX(startPos, dir, heroType, skillKey);
+            } else if (heroType === 'GUNNER') {
+                pGeo = skillKey === 'R' ? new THREE.CylinderGeometry(0.4, 0.4, 2.2) : new THREE.SphereGeometry(0.3, 14, 14);
+                pMat = new THREE.MeshBasicMaterial({ color: 0xf87171 });
+                if (isFromPlayer) createUniqueSkillVFX(startPos, dir, heroType, skillKey);
+            } else {
+                pGeo = new THREE.SphereGeometry(skillKey === 'R' ? 1.6 : 0.6, 20, 20);
+                pMat = new THREE.MeshStandardMaterial({ color: 0xd8b4fe, emissive: 0xa855f7, emissiveIntensity: 3.5, roughness: 0.1 });
+                if (isFromPlayer) createUniqueSkillVFX(startPos, dir, heroType, skillKey);
+            }
+
+            const pMesh = new THREE.Mesh(pGeo, pMat);
+            pMesh.position.copy(startPos);
+            pMesh.quaternion.setFromUnitVectors(new THREE.Vector3(0, 0, -1), dir.clone().normalize());
+            scene.add(pMesh);
+
+            projectiles.push({
+                mesh: pMesh,
+                dir: dir.clone(),
+                speed: heroType === 'WARRIOR' ? 36 : (heroType === 'GUNNER' ? 58 : 45),
+                life: heroType === 'WARRIOR' ? 50 : 120,
+                damage: calculatedDmg,
+                heroType: heroType,
+                isFromPlayer: isFromPlayer
+            });
+        }
+
+        function triggerBasicAttack() {
+            const dir = get3DAimingVector();
+            player.isAttacking = true;
+            player.attackSwingAnim = 0;
+
+            spawnProjectile(player.pos.clone().add(new THREE.Vector3(0, 1.4, 0)), dir, player.type, 'Q', true);
+            sendMultiplayerData({ type: 'ATTACK', x: player.pos.x, y: player.pos.y + 1.4, z: player.pos.z, dirX: dir.x, dirY: dir.y, dirZ: dir.z });
+        }
+
+        function triggerSkill(slot) {
+            const now = Date.now();
+            const cdKey = 'cd' + slot;
+            const skill = HERO_TYPES[player.type].skills[slot];
+
+            const cdRed = SHOP_ITEMS.SPEED_BOOTS.getStats(player.itemLevels.SPEED_BOOTS).cdReduction;
+            const effectiveCD = skill.cd * (1 - cdRed);
+
+            if (now < player[cdKey]) return;
+
+            player[cdKey] = now + effectiveCD;
+            player.isAttacking = true;
+            player.attackSwingAnim = 0;
+
+            const dir = get3DAimingVector();
+            spawnProjectile(player.pos.clone().add(new THREE.Vector3(0, 1.4, 0)), dir, player.type, slot, true);
+
+            sendMultiplayerData({ type: 'ATTACK', x: player.pos.x, y: player.pos.y + 1.4, z: player.pos.z, dirX: dir.x, dirY: dir.y, dirZ: dir.z });
+
+            const cdOverlay = document.getElementById(`cd-${slot.toLowerCase()}`);
+            if (cdOverlay) {
+                cdOverlay.style.height = '100%';
+                let remaining = effectiveCD;
+                const interval = setInterval(() => {
+                    remaining -= 100;
+                    const pct = Math.max(0, (remaining / effectiveCD) * 100);
+                    cdOverlay.style.height = pct + '%';
+                    if (remaining <= 0) clearInterval(interval);
+                }, 100);
+            }
+        }
+
+        function createParticleExplosion(pos, colorHex, count = 45, scale = 1.3) {
+            for (let i = 0; i < count; i++) {
+                const pGeo = new THREE.SphereGeometry(0.16 * scale, 8, 8);
+                const pMat = new THREE.MeshBasicMaterial({ color: colorHex });
+                const p = new THREE.Mesh(pGeo, pMat);
+                p.position.copy(pos);
+                scene.add(p);
+
+                const vel = new THREE.Vector3(
+                    (Math.random() - 0.5) * 16 * scale,
+                    (Math.random() - 0.2) * 16 * scale,
+                    (Math.random() - 0.5) * 16 * scale
+                );
+
+                particleEffects.push({ mesh: p, vel: vel, life: 40 });
+            }
+        }
+
+        function updateParticles() {
+            for (let i = particleEffects.length - 1; i >= 0; i--) {
+                const p = particleEffects[i];
+                p.mesh.position.addScaledVector(p.vel, 0.016);
+                p.life--;
+                if (p.life <= 0) {
+                    scene.remove(p.mesh);
+                    particleEffects.splice(i, 1);
+                }
+            }
+        }
+
+        function showDamageFloatingText(pos, amount, isReflect = false) {
+            const container = document.getElementById('damage-container');
+            const screenPos = pos.clone().project(camera);
+            const x = (screenPos.x * 0.5 + 0.5) * window.innerWidth;
+            const y = (-(screenPos.y * 0.5) + 0.5) * window.innerHeight;
+
+            const el = document.createElement('div');
+            el.className = isReflect ? 'dmg-text text-2xl text-purple-400 font-extrabold' : 'dmg-text text-3xl text-amber-300 font-extrabold';
+            el.innerText = isReflect ? `Phản: -${Math.round(amount)}` : `-${Math.round(amount)}`;
+            el.style.left = `${x}px`;
+            el.style.top = `${y}px`;
+            container.appendChild(el);
+
+            setTimeout(() => el.remove(), 800);
+        }
+
+        /* ----------------------------------------------------
+           7. MULTI-LEVEL ITEM SHOP PURCHASES
+        ---------------------------------------------------- */
+        function getItemPrice(itemKey) {
+            const item = SHOP_ITEMS[itemKey];
+            if (!item || !item.basePrice) return 0;
+            const currentLvl = player.itemLevels[itemKey] || 0;
+            return Math.round(item.basePrice * Math.pow(item.priceScale, currentLvl));
+        }
+
+        function buyItem(itemKey) {
+            if (itemKey === 'HEALTH_POTION') {
+                const price = SHOP_ITEMS.HEALTH_POTION.price;
+                if (player.gold < price) {
+                    alert('Bạn không đủ Vàng để mua Thuốc Máu!');
+                    return;
+                }
+                player.gold -= price;
+                player.hp = player.maxHp;
+                updateShopHUD();
+                updatePlayerHUD();
+                alert('Đã hồi phục 100% Máu!');
+                return;
+            }
+
+            const item = SHOP_ITEMS[itemKey];
+            const currentLvl = player.itemLevels[itemKey];
+
+            if (currentLvl >= item.maxLevel) {
+                alert('Trang bị này đã đạt Cấp Độ Tối Đa (Max Level)!');
+                return;
+            }
+
+            const price = getItemPrice(itemKey);
+            if (player.gold < price) {
+                alert(`Bạn không đủ Vàng! Cần ${price}G.`);
+                return;
+            }
+
+            player.gold -= price;
+            player.itemLevels[itemKey]++;
+
+            if (itemKey === 'SPIKE_ARMOR') {
+                const oldHpBonus = currentLvl > 0 ? SHOP_ITEMS.SPIKE_ARMOR.getStats(currentLvl).hpBonus : 0;
+                const newHpBonus = SHOP_ITEMS.SPIKE_ARMOR.getStats(currentLvl + 1).hpBonus;
+                const diff = newHpBonus - oldHpBonus;
+
+                player.maxHp += diff;
+                player.hp += diff;
+            } else if (itemKey === 'DRONE' && player.itemLevels.DRONE === 1) {
+                player.droneMesh = createDroneMesh();
+                scene.add(player.droneMesh);
+            }
+
+            updateShopHUD();
+            updatePlayerHUD();
+        }
+
+        function updateShopHUD() {
+            document.getElementById('shop-gold-val').innerText = player.gold;
+            document.getElementById('hud-player-gold').innerText = player.gold + 'G';
+
+            ['SPIKE_ARMOR', 'DRONE', 'SWORD_UPGRADE', 'SPEED_BOOTS'].forEach(itemKey => {
+                const item = SHOP_ITEMS[itemKey];
+                const curLvl = player.itemLevels[itemKey];
+                const lvlText = document.getElementById(`lvl-${itemKey}`);
+                const priceText = document.getElementById(`price-${itemKey}`);
+                const btn = document.getElementById(`btn-buy-${itemKey}`);
+
+                if (lvlText) lvlText.innerText = `Cấp ${curLvl}/${item.maxLevel}`;
+
+                if (curLvl >= item.maxLevel) {
+                    if (priceText) priceText.innerText = 'Tối Đa (MAX)';
+                    if (btn) {
+                        btn.innerText = 'ĐÃ MAX';
+                        btn.disabled = true;
+                        btn.className = 'w-full py-2 bg-gray-700 text-gray-400 font-bold text-xs rounded-lg uppercase cursor-not-allowed';
+                    }
+                } else {
+                    const price = getItemPrice(itemKey);
+                    if (priceText) priceText.innerText = `Giá: ${price} Vàng`;
+                    if (btn) {
+                        btn.disabled = false;
+                        btn.innerText = curLvl === 0 ? 'MUA TRANG BỊ' : `NÂNG CẤP (LV ${curLvl + 1})`;
+                    }
+                }
+            });
+        }
+
+        function updatePlayerHUD() {
+            const playerPct = Math.max(0, (player.hp / player.maxHp) * 100);
+            document.getElementById('hud-hp-bar').style.width = playerPct + '%';
+            document.getElementById('hud-hp-text').innerText = `${Math.round(player.hp)} / ${player.maxHp}`;
+            document.getElementById('hud-player-level').innerText = player.level;
+            document.getElementById('hud-player-gold').innerText = player.gold + 'G';
+
+            const activeContainer = document.getElementById('hud-active-items');
+            activeContainer.innerHTML = '';
+            if (player.itemLevels.SPIKE_ARMOR > 0) activeContainer.innerHTML += `<span>🛡️ Giáp Gai Lv${player.itemLevels.SPIKE_ARMOR}</span>`;
+            if (player.itemLevels.DRONE > 0) activeContainer.innerHTML += `<span>🤖 Drone Lv${player.itemLevels.DRONE}</span>`;
+            if (player.itemLevels.SWORD_UPGRADE > 0) activeContainer.innerHTML += `<span>⚔️ Kiếm Bá Vương Lv${player.itemLevels.SWORD_UPGRADE}</span>`;
+            if (player.itemLevels.SPEED_BOOTS > 0) activeContainer.innerHTML += `<span>👟 Giày Lv${player.itemLevels.SPEED_BOOTS}</span>`;
+        }
+
+        /* ----------------------------------------------------
+           8. STAGE CLEAR & SHOP SYSTEM HANDLERS
+        ---------------------------------------------------- */
+        function openShopModal() {
+            isShopping = true;
+            document.exitPointerLock();
+
+            player.level++;
+            player.maxHp += 250;
+            player.hp = player.maxHp;
+
+            const stage = STAGES[currentStageIndex];
+            player.gold += stage.goldReward;
+
+            document.getElementById('shop-title').innerText = `HOÀN THÀNH ${stage.title} - CỬA HÀNG`;
+            document.getElementById('shop-level-up-text').innerText = `🎉 THĂNG LÊN CẤP ${player.level}! (+250 MÁU TOÀN DIỆN, +15% SÁT THƯƠNG)`;
+            
+            updateShopHUD();
+            updatePlayerHUD();
+
+            const shopModal = document.getElementById('shop-modal');
+            shopModal.classList.remove('hidden');
+
+            if (gameMode === 'ONLINE') {
+                document.getElementById('shop-online-status-bar').classList.remove('hidden');
+                document.getElementById('shop-online-ready-text').innerText = 'Đang chờ bạn nâng cấp đồ và bấm MUA XONG...';
+                shopReadyState.hostDone = false;
+                shopReadyState.guestDone = false;
+            } else {
+                document.getElementById('shop-online-status-bar').classList.add('hidden');
+            }
+        }
+
+        function finishShoppingAndNextStage() {
+            if (gameMode === 'ONLINE') {
+                if (isHost) shopReadyState.hostDone = true;
+                else shopReadyState.guestDone = true;
+
+                sendMultiplayerData({ type: 'SHOP_READY', isHost: isHost });
+
+                document.getElementById('shop-online-ready-text').innerText = 'Bạn đã sẵn sàng! Đang chờ đồng đội hoàn tất nâng cấp...';
+                document.getElementById('btn-finish-shop').innerText = 'ĐANG CHỜ ĐỒNG ĐỘI...';
+                document.getElementById('btn-finish-shop').disabled = true;
+
+                checkBothPlayersShopReady();
+            } else {
+                proceedNextStage();
+            }
+        }
+
+        function checkBothPlayersShopReady() {
+            if (shopReadyState.hostDone && shopReadyState.guestDone) {
+                if (isHost) {
+                    sendMultiplayerData({ type: 'PROCEED_STAGE' });
+                    proceedNextStage();
+                }
+            }
+        }
+
+        function proceedNextStage() {
+            document.getElementById('shop-modal').classList.add('hidden');
+            document.getElementById('btn-finish-shop').disabled = false;
+            document.getElementById('btn-finish-shop').innerText = 'MUA XONG - TIẾP TỤC SANG ẢI TIẾP THEO';
+            
+            isShopping = false;
+            document.body.requestPointerLock();
+
+            if (currentStageIndex < STAGES.length - 1) {
+                currentStageIndex++;
+                startCurrentStage();
+            } else {
+                showGameOver(true);
+            }
+        }
+
+        /* ----------------------------------------------------
+           9. STAGE & SPAWN MOBS (HOST AUTHORITATIVE & SYNC)
+        ---------------------------------------------------- */
+        function startCurrentStage() {
+            activeMobs.forEach(mob => { if(mob.mesh) scene.remove(mob.mesh); });
+            activeMobs = [];
+
+            const stage = STAGES[currentStageIndex];
+            document.getElementById('hud-stage-title').innerText = stage.title;
+            document.getElementById('hud-stage-num').innerText = `${stage.id} / ${STAGES.length}`;
+            document.getElementById('hud-mobs-left').innerText = stage.mobCount;
+
+            if (gameMode === 'ONLINE' && !isHost) return;
+
+            for (let i = 0; i < stage.mobCount; i++) {
+                const angle = (i / stage.mobCount) * Math.PI * 2;
+                const dist = stage.isBossStage ? 26 : 22 + Math.random() * 20;
+                const mx = Math.cos(angle) * dist;
+                const mz = Math.sin(angle) * dist;
+
+                const heroKeys = Object.keys(HERO_TYPES);
+                const mobType = stage.isBossStage ? 'WARRIOR' : heroKeys[i % heroKeys.length];
+                const { group: mobMesh } = createHeroMesh(mobType);
+
+                if (stage.isBossStage) {
+                    mobMesh.scale.set(3.2, 3.2, 3.2);
+                }
+
+                const mob = {
+                    id: 'mob_' + currentStageIndex + '_' + i,
+                    mesh: mobMesh,
+                    type: mobType,
+                    hp: stage.mobHp,
+                    maxHp: stage.mobHp,
+                    damage: stage.mobDmg,
+                    speed: stage.speed,
+                    attackType: stage.attackType,
+                    pos: new THREE.Vector3(mx, 0, mz),
+                    rotY: 0,
+                    lastAttack: 0,
+                    isBoss: stage.isBossStage
+                };
+
+                mobMesh.position.copy(mob.pos);
+                scene.add(mobMesh);
+                activeMobs.push(mob);
+            }
+
+            if (gameMode === 'ONLINE' && isHost) {
+                broadcastMobsState();
+            }
+        }
+
+        function updateMobsAI(delta) {
+            if (!isGameRunning || isPaused || isShopping) return;
+
+            if (gameMode === 'ONLINE' && !isHost) return;
+
+            const now = Date.now();
+
+            for (let i = activeMobs.length - 1; i >= 0; i--) {
+                const mob = activeMobs[i];
+                if (mob.hp <= 0) continue;
+
+                let targetPos = player.pos;
+                if (gameMode === 'ONLINE' && teammate.mesh && teammate.hp > 0) {
+                    const distToPlayer = mob.pos.distanceTo(player.pos);
+                    const distToAlly = mob.pos.distanceTo(teammate.pos);
+                    if (distToAlly < distToPlayer) targetPos = teammate.pos;
+                }
+
+                const dist = mob.pos.distanceTo(targetPos);
+                const dir = targetPos.clone().sub(mob.pos).normalize();
+                mob.rotY = Math.atan2(-dir.x, -dir.z);
+
+                if (mob.attackType === 'RANGED' && dist < 12) {
+                    mob.pos.addScaledVector(dir, -mob.speed * 0.5 * delta);
+                } else if (dist > 3) {
+                    mob.pos.addScaledVector(dir, mob.speed * delta);
+                }
+
+                mob.pos.y = getTerrainHeight(mob.pos.x, mob.pos.z);
+                mob.mesh.position.copy(mob.pos);
+                mob.mesh.rotation.y = mob.rotY;
+
+                if (dist < 22 && now - mob.lastAttack > 2200) {
+                    mob.lastAttack = now;
+                    spawnProjectile(mob.pos.clone().add(new THREE.Vector3(0, 1.6, 0)), dir, mob.type, 'Q', false);
+                }
+            }
+
+            if (gameMode === 'ONLINE' && isHost) {
+                broadcastMobsState();
+            }
+        }
+
+        function broadcastMobsState() {
+            const mobData = activeMobs.map(m => ({
+                id: m.id,
+                type: m.type,
+                x: m.pos.x,
+                y: m.pos.y,
+                z: m.pos.z,
+                rotY: m.rotY,
+                hp: m.hp,
+                maxHp: m.maxHp,
+                isBoss: m.isBoss
+            }));
+
+            sendMultiplayerData({
+                type: 'MOBS_SYNC',
+                stageIndex: currentStageIndex,
+                mobs: mobData
+            });
+        }
+
+        /* ----------------------------------------------------
+           10. DAMAGE RESOLUTION & REFLECT
+        ---------------------------------------------------- */
+        function applyDamageToMob(mob, amount) {
+            mob.hp = Math.max(0, mob.hp - amount);
+            showDamageFloatingText(mob.pos, amount);
+
+            if (mob.hp <= 0) {
+                createParticleExplosion(mob.pos, 0xf59e0b, 45, 1.5);
+                scene.remove(mob.mesh);
+                const idx = activeMobs.indexOf(mob);
+                if (idx !== -1) activeMobs.splice(idx, 1);
+
+                document.getElementById('hud-mobs-left').innerText = activeMobs.length;
+
+                if (activeMobs.length === 0) {
+                    setTimeout(() => openShopModal(), 1000);
+                }
+            }
+
+            if (gameMode === 'ONLINE' && isHost) {
+                broadcastMobsState();
+            }
+        }
+
+        function updateProjectiles() {
+            for (let i = projectiles.length - 1; i >= 0; i--) {
+                const p = projectiles[i];
+                p.mesh.position.addScaledVector(p.dir, p.speed * 0.016);
+                p.life--;
+
+                if (p.isFromPlayer) {
+                    for (let j = activeMobs.length - 1; j >= 0; j--) {
+                        const mob = activeMobs[j];
+                        const dist = p.mesh.position.distanceTo(mob.pos.clone().add(new THREE.Vector3(0, 1.2, 0)));
+                        if (dist < (mob.isBoss ? 3.4 : 2.0)) {
+                            if (gameMode === 'ONLINE' && !isHost) {
+                                sendMultiplayerData({
+                                    type: 'GUEST_HIT_MOB',
+                                    mobId: mob.id,
+                                    damage: p.damage
+                                });
+                                showDamageFloatingText(mob.pos, p.damage);
+                            } else {
+                                applyDamageToMob(mob, p.damage);
+                            }
+                            createParticleExplosion(p.mesh.position, HERO_TYPES[p.heroType].color, 30, 1.2);
+                            scene.remove(p.mesh);
+                            projectiles.splice(i, 1);
+                            break;
+                        }
+                    }
+                } else {
+                    const distP = p.mesh.position.distanceTo(player.pos.clone().add(new THREE.Vector3(0, 1.2, 0)));
+                    if (distP < 1.6) {
+                        const stage = STAGES[currentStageIndex];
+                        const incomingDmg = stage.mobDmg;
+
+                        player.hp = Math.max(0, player.hp - incomingDmg);
+                        showDamageFloatingText(player.pos, incomingDmg);
+                        updatePlayerHUD();
+
+                        const spikeLvl = player.itemLevels.SPIKE_ARMOR;
+                        if (spikeLvl > 0) {
+                            const reflectPct = SHOP_ITEMS.SPIKE_ARMOR.getStats(spikeLvl).reflectPct;
+                            const reflectedDmg = incomingDmg * reflectPct;
+                            
+                            activeMobs.forEach(mob => {
+                                if (mob.pos.distanceTo(player.pos) < 15) {
+                                    if (gameMode === 'ONLINE' && !isHost) {
+                                        sendMultiplayerData({ type: 'GUEST_HIT_MOB', mobId: mob.id, damage: reflectedDmg });
+                                    } else {
+                                        mob.hp = Math.max(0, mob.hp - reflectedDmg);
+                                    }
+                                    showDamageFloatingText(mob.pos, reflectedDmg, true);
+                                }
+                            });
+                        }
+
+                        if (player.hp <= 0) showGameOver(false);
+
+                        scene.remove(p.mesh);
+                        projectiles.splice(i, 1);
+                        continue;
+                    }
+                }
+
+                if (p.life <= 0) {
+                    scene.remove(p.mesh);
+                    projectiles.splice(i, 1);
+                }
+            }
+        }
+
+        /* ----------------------------------------------------
+           11. WEBRTC & CLOUD HYBRID MULTIPLAYER
+        ---------------------------------------------------- */
+        function getNickname() {
+            return document.getElementById('player-nickname-input').value.trim() || 'Chiến Binh Aether';
+        }
+
+        function updateMenuStatus(msg) {
+            document.getElementById('menu-status').innerText = msg;
+        }
+
+        function selectHero(heroKey) {
+            selectedHeroKey = heroKey;
+            document.querySelectorAll('.hero-btn').forEach(btn => btn.classList.remove('glass-button-active'));
+            document.getElementById(`hero-${heroKey}`).classList.add('glass-button-active');
+            
+            if (gameMode === 'ONLINE' && lobbyState) {
+                if (isHost) lobbyState.hostHero = heroKey;
+                else lobbyState.guestHero = heroKey;
+                updateLobbyUI();
+                sendMultiplayerData({ type: 'HERO_SELECT', hero: heroKey });
+            }
+        }
+
+        function setupPeerEvents(conn) {
+            activePeerConn = conn;
+
+            conn.on('open', () => {
+                if (!isHost) {
+                    sendMultiplayerData({
+                        type: 'GUEST_JOIN',
+                        name: playerNickname,
+                        hero: selectedHeroKey
+                    });
+                }
+            });
+
+            conn.on('data', (data) => handleNetworkData(data));
+            conn.on('close', () => updateMenuStatus('Kết nối đối phương đã ngắt.'));
+        }
+
+        function setupFirebaseRelay(roomCode) {
+            if (!window.fbDb) return;
+            const roomRef = window.fbRef(window.fbDb, 'rooms/' + roomCode);
+
+            window.fbOnValue(roomRef, (snapshot) => {
+                const data = snapshot.val();
+                if (!data) return;
+
+                if (isHost && data.guestData) {
+                    handleNetworkData(data.guestData);
+                } else if (!isHost && data.hostData) {
+                    handleNetworkData(data.hostData);
+                }
+            });
+        }
+
+        function sendMultiplayerData(data) {
+            if (activePeerConn && activePeerConn.open) {
+                activePeerConn.send(data);
+            }
+
+            if (window.fbDb && roomCode) {
+                const targetKey = isHost ? 'rooms/' + roomCode + '/hostData' : 'rooms/' + roomCode + '/guestData';
+                window.fbSet(window.fbRef(window.fbDb, targetKey), { payload: data, ts: Date.now() });
+            }
+        }
+
+        function handleNetworkData(raw) {
+            const data = raw.payload ? raw.payload : raw;
+            if (!data) return;
+
+            if (data.type === 'GUEST_JOIN' && isHost) {
+                lobbyState.guestName = data.name;
+                lobbyState.guestHero = data.hero;
+                lobbyState.guestConnected = true;
+                lobbyState.guestReady = false;
+                updateLobbyUI();
+                sendMultiplayerData({ type: 'LOBBY_SYNC', state: lobbyState });
+            } else if (data.type === 'LOBBY_SYNC' && !isHost) {
+                lobbyState = data.state;
+                lobbyState.guestConnected = true;
+                updateLobbyUI();
+            } else if (data.type === 'HERO_SELECT') {
+                if (isHost) lobbyState.guestHero = data.hero;
+                else lobbyState.hostHero = data.hero;
+                updateLobbyUI();
+            } else if (data.type === 'GUEST_READY' && isHost) {
+                lobbyState.guestReady = data.ready;
+                updateLobbyUI();
+                sendMultiplayerData({ type: 'LOBBY_SYNC', state: lobbyState });
+            } else if (data.type === 'START_MATCH') {
+                launchOnlineBattle();
+            } else if (data.type === 'SHOP_READY') {
+                if (data.isHost) shopReadyState.hostDone = true;
+                else shopReadyState.guestDone = true;
+                checkBothPlayersShopReady();
+            } else if (data.type === 'PROCEED_STAGE') {
+                proceedNextStage();
+            } else if (data.type === 'POS_SYNC' && gameMode === 'ONLINE') {
+                if (teammate.mesh) {
+                    teammate.pos.set(data.x, data.y, data.z);
+                    teammate.rotY = data.rotY;
+                    teammate.hp = data.hp;
+                    teammate.maxHp = data.maxHp;
+                    teammate.mesh.position.copy(teammate.pos);
+                    teammate.mesh.rotation.y = teammate.rotY;
+
+                    const allyPct = Math.max(0, (teammate.hp / teammate.maxHp) * 100);
+                    document.getElementById('hud-ally-hp-bar').style.width = allyPct + '%';
+                    document.getElementById('hud-ally-hp-text').innerText = `${Math.round(teammate.hp)} / ${teammate.maxHp}`;
+                }
+            } else if (data.type === 'ATTACK' && gameMode === 'ONLINE') {
+                const startPos = new THREE.Vector3(data.x, data.y, data.z);
+                const dir = new THREE.Vector3(data.dirX, data.dirY, data.dirZ);
+                spawnProjectile(startPos, dir, teammate.type, 'Q', true);
+            } else if (data.type === 'MOBS_SYNC' && gameMode === 'ONLINE' && !isHost) {
+                currentStageIndex = data.stageIndex;
+                const stage = STAGES[currentStageIndex];
+                document.getElementById('hud-stage-title').innerText = stage.title;
+                document.getElementById('hud-stage-num').innerText = `${stage.id} / ${STAGES.length}`;
+                document.getElementById('hud-mobs-left').innerText = data.mobs.length;
+
+                const hostMobIds = data.mobs.map(m => m.id);
+
+                for (let i = activeMobs.length - 1; i >= 0; i--) {
+                    if (!hostMobIds.includes(activeMobs[i].id)) {
+                        createParticleExplosion(activeMobs[i].pos, 0xf59e0b, 45, 1.5);
+                        scene.remove(activeMobs[i].mesh);
+                        activeMobs.splice(i, 1);
+                    }
+                }
+
+                data.mobs.forEach(mObj => {
+                    let existingMob = activeMobs.find(m => m.id === mObj.id);
+                    if (existingMob) {
+                        existingMob.pos.set(mObj.x, mObj.y, mObj.z);
+                        existingMob.rotY = mObj.rotY;
+                        existingMob.hp = mObj.hp;
+                        existingMob.maxHp = mObj.maxHp;
+                        existingMob.mesh.position.copy(existingMob.pos);
+                        existingMob.mesh.rotation.y = existingMob.rotY;
+                    } else {
+                        const { group: mobMesh } = createHeroMesh(mObj.type);
+                        if (mObj.isBoss) mobMesh.scale.set(3.2, 3.2, 3.2);
+
+                        const newMob = {
+                            id: mObj.id,
+                            mesh: mobMesh,
+                            type: mObj.type,
+                            hp: mObj.hp,
+                            maxHp: mObj.maxHp,
+                            pos: new THREE.Vector3(mObj.x, mObj.y, mObj.z),
+                            rotY: mObj.rotY,
+                            isBoss: mObj.isBoss
+                        };
+                        mobMesh.position.copy(newMob.pos);
+                        scene.add(mobMesh);
+                        activeMobs.push(newMob);
+                    }
+                });
+
+                if (data.mobs.length === 0 && activeMobs.length === 0 && !isShopping) {
+                    setTimeout(() => openShopModal(), 1000);
+                }
+            } else if (data.type === 'GUEST_HIT_MOB' && isHost) {
+                const targetMob = activeMobs.find(m => m.id === data.mobId);
+                if (targetMob) {
+                    applyDamageToMob(targetMob, data.damage);
+                }
+            }
+        }
+
+        function syncMultiplayerState() {
+            if (gameMode === 'ONLINE') {
+                sendMultiplayerData({
+                    type: 'POS_SYNC',
+                    x: player.pos.x,
+                    y: player.pos.y,
+                    z: player.pos.z,
+                    rotY: player.rotY,
+                    hp: player.hp,
+                    maxHp: player.maxHp
+                });
+            }
+        }
+
+        function updateLobbyUI() {
+            document.getElementById('host-name').innerText = lobbyState.hostName || 'Host';
+            document.getElementById('host-hero-name').innerText = 'Tướng: ' + (HERO_TYPES[lobbyState.hostHero]?.name || lobbyState.hostHero);
+
+            document.getElementById('guest-name').innerText = lobbyState.guestConnected ? (lobbyState.guestName || 'Đồng Đội') : 'Đang chờ người tham gia...';
+            document.getElementById('guest-hero-name').innerText = 'Tướng: ' + (lobbyState.guestConnected ? (HERO_TYPES[lobbyState.guestHero]?.name || lobbyState.guestHero) : '--');
+
+            const guestStatusEl = document.getElementById('guest-status');
+            if (lobbyState.guestConnected) {
+                guestStatusEl.innerText = lobbyState.guestReady ? 'SẴN SÀNG' : 'CHƯA SẴN SÀNG';
+                guestStatusEl.className = lobbyState.guestReady
+                    ? 'mt-2 text-xs font-bold text-emerald-400 border border-emerald-500/60 px-3 py-1 rounded-full bg-emerald-500/20'
+                    : 'mt-2 text-xs font-bold text-yellow-400 border border-yellow-500/60 px-3 py-1 rounded-full bg-yellow-500/20';
+            } else {
+                guestStatusEl.innerText = 'CHƯA VÀO PHÒNG';
+                guestStatusEl.className = 'mt-2 text-xs font-bold text-gray-500 border border-gray-600/60 px-3 py-1 rounded-full bg-black/60';
+            }
+
+            const startBtn = document.getElementById('btn-start-game');
+            if (isHost) {
+                startBtn.classList.remove('hidden');
+                if (lobbyState.guestConnected && lobbyState.guestReady) {
+                    startBtn.disabled = false;
+                    startBtn.classList.remove('opacity-50', 'cursor-not-allowed');
+                } else {
+                    startBtn.disabled = true;
+                    startBtn.classList.add('opacity-50', 'cursor-not-allowed');
+                }
+            } else {
+                startBtn.classList.add('hidden');
+            }
+        }
+
+        function toggleGuestReady() {
+            if (isHost) return;
+            lobbyState.guestReady = !lobbyState.guestReady;
+            sendMultiplayerData({ type: 'GUEST_READY', ready: lobbyState.guestReady });
+            const readyBtn = document.getElementById('btn-toggle-ready');
+            readyBtn.innerText = lobbyState.guestReady ? 'HỦY SẴN SÀNG' : 'SẴN SÀNG';
+            updateLobbyUI();
+        }
+
+        function leaveLobby() {
+            if (activePeerConn) {
+                try { activePeerConn.close(); } catch(e) {}
+                activePeerConn = null;
+            }
+            if (peer) {
+                try { peer.destroy(); } catch(e) {}
+                peer = null;
+            }
+            
+            document.getElementById('lobby-modal').classList.add('hidden');
+            const mainMenu = document.getElementById('main-menu');
+            mainMenu.classList.remove('hidden', 'opacity-0', 'pointer-events-none');
+
+            gameMode = 'VS_AI';
+            isHost = false;
+            updateMenuStatus('Đã rời phòng chờ và quay về menu.');
+        }
+
+        /* ----------------------------------------------------
+           12. ROOM INITIALIZATION & BATTLE LAUNCH
+        ---------------------------------------------------- */
+        function startSinglePlayer(e) {
+            if (e) {
+                e.preventDefault();
+                e.stopPropagation();
+            }
+            gameMode = 'VS_AI';
+            playerNickname = getNickname();
+            
+            if (peer) {
+                peer.destroy();
+                peer = null;
+            }
+
+            document.getElementById('lobby-modal').classList.add('hidden');
+            document.getElementById('hud-room-tag').classList.add('hidden');
+            document.getElementById('hud-ally-container').classList.add('hidden');
+
+            const mainMenu = document.getElementById('main-menu');
+            mainMenu.classList.add('opacity-0', 'pointer-events-none');
+            setTimeout(() => mainMenu.classList.add('hidden'), 300);
+
+            spawnGameEntities();
+            startGameplay();
+        }
+
+        function createOnlineRoom(e) {
+            if (e) {
+                e.preventDefault();
+                e.stopPropagation();
+            }
+            gameMode = 'ONLINE';
+            isHost = true;
+            playerNickname = getNickname();
+            
+            const randomCode = Math.floor(100000 + Math.random() * 900000).toString();
+            roomCode = randomCode;
+
+            lobbyState = {
+                hostName: playerNickname,
+                hostHero: selectedHeroKey,
+                hostReady: true,
+                guestName: 'Đang chờ đồng đội...',
+                guestHero: 'MAGE',
+                guestReady: false,
+                guestConnected: false
+            };
+
+            document.getElementById('main-menu').classList.add('hidden');
+            document.getElementById('lobby-room-code').innerText = roomCode;
+            document.getElementById('lobby-modal').classList.remove('hidden');
+            document.getElementById('btn-start-game').classList.remove('hidden');
+            document.getElementById('btn-toggle-ready').classList.add('hidden');
+            updateLobbyUI();
+
+            updateMenuStatus('Đang khởi tạo kết nối P2P + Relay cho mã phòng: ' + roomCode);
+            setupFirebaseRelay(roomCode);
+
+            if (peer) {
+                try { peer.destroy(); } catch(err) {}
+            }
+
+            try {
+                peer = new Peer('aether-room-' + roomCode, {
+                    debug: 1,
+                    config: {
+                        iceServers: [
+                            { urls: 'stun:stun.l.google.com:19020' },
+                            { urls: 'stun:stun1.l.google.com:19020' }
+                        ]
+                    }
+                });
+
+                peer.on('open', (id) => updateMenuStatus('Phòng ' + roomCode + ' đã sẵn sàng! Mời đồng đội nhập mã.'));
+                peer.on('connection', (conn) => setupPeerEvents(conn));
+            } catch (err) {
+                console.warn('PeerJS Exception:', err);
+            }
+        }
+
+        function joinOnlineRoom(e) {
+            if (e) {
+                e.preventDefault();
+                e.stopPropagation();
+            }
+            const inputCode = document.getElementById('join-room-input').value.trim();
+            if (!inputCode || inputCode.length !== 6) {
+                updateMenuStatus('Vui lòng nhập Mã Phòng 6 chữ số hợp lệ!');
+                return;
+            }
+
+            gameMode = 'ONLINE';
+            isHost = false;
+            playerNickname = getNickname();
+            roomCode = inputCode;
+
+            document.getElementById('main-menu').classList.add('hidden');
+            document.getElementById('lobby-room-code').innerText = roomCode;
+            document.getElementById('lobby-modal').classList.remove('hidden');
+            document.getElementById('btn-start-game').classList.add('hidden');
+            document.getElementById('btn-toggle-ready').classList.remove('hidden');
+            updateLobbyUI();
+
+            updateMenuStatus('Đang kết nối tới phòng ' + roomCode + '...');
+            setupFirebaseRelay(roomCode);
+
+            sendMultiplayerData({ type: 'GUEST_JOIN', name: playerNickname, hero: selectedHeroKey });
+
+            if (peer) {
+                try { peer.destroy(); } catch(err) {}
+            }
+
+            try {
+                peer = new Peer({
+                    debug: 1,
+                    config: {
+                        iceServers: [
+                            { urls: 'stun:stun.l.google.com:19020' },
+                            { urls: 'stun:stun1.l.google.com:19020' }
+                        ]
+                    }
+                });
+
+                peer.on('open', () => {
+                    const hostPeerId = 'aether-room-' + roomCode;
+                    const conn = peer.connect(hostPeerId, { reliable: true });
+                    setupPeerEvents(conn);
+                });
+            } catch (err) {
+                console.warn('PeerJS Join Exception:', err);
+            }
+        }
+
+        function hostStartOnlineGame() {
+            if (!isHost || !lobbyState.guestConnected || !lobbyState.guestReady) return;
+            sendMultiplayerData({ type: 'START_MATCH' });
+            launchOnlineBattle();
+        }
+
+        function launchOnlineBattle() {
+            document.getElementById('lobby-modal').classList.add('hidden');
+            document.getElementById('main-menu').classList.add('hidden');
+
+            if (isHost) {
+                selectedHeroKey = lobbyState.hostHero;
+                teammate.type = lobbyState.guestHero;
+            } else {
+                selectedHeroKey = lobbyState.guestHero;
+                teammate.type = lobbyState.hostHero;
+            }
+
+            document.getElementById('hud-room-tag').classList.remove('hidden');
+            document.getElementById('hud-room-code').innerText = roomCode;
+            document.getElementById('hud-ally-container').classList.remove('hidden');
+
+            spawnGameEntities();
+            startGameplay();
+        }
+
+        function startGameplay() {
+            isGameRunning = true;
+            isPaused = false;
+            isShopping = false;
+            document.getElementById('game-hud').classList.remove('hidden');
+            document.body.requestPointerLock();
+        }
+
+        function togglePauseMenu() {
+            if (!isGameRunning || isShopping) return;
+            isPaused = !isPaused;
+            if (isPaused) {
+                document.exitPointerLock();
+                document.getElementById('pause-overlay').classList.remove('hidden');
+            } else {
+                document.body.requestPointerLock();
+                document.getElementById('pause-overlay').classList.add('hidden');
+            }
+        }
+
+        function resumeGame() {
+            isPaused = false;
+            document.body.requestPointerLock();
+            document.getElementById('pause-overlay').classList.add('hidden');
+        }
+
+        function returnToMenu() {
+            isGameRunning = false;
+            isPaused = false;
+            isShopping = false;
+            document.exitPointerLock();
+            document.getElementById('pause-overlay').classList.add('hidden');
+            document.getElementById('game-over-modal').classList.add('hidden');
+            document.getElementById('shop-modal').classList.add('hidden');
+            document.getElementById('game-hud').classList.add('hidden');
+            
+            const mainMenu = document.getElementById('main-menu');
+            mainMenu.classList.remove('hidden', 'opacity-0', 'pointer-events-none');
+        }
+
+        function showGameOver(isWin) {
+            isGameRunning = false;
+            document.exitPointerLock();
+            const modal = document.getElementById('game-over-modal');
+            const title = document.getElementById('game-over-title');
+            const desc = document.getElementById('game-over-desc');
+
+            if (isWin) {
+                title.innerText = "CHIẾN THẮNG RỰC RỠ!";
+                title.className = "text-4xl font-extrabold font-cinzel text-amber-400 mb-2";
+                desc.innerText = "Bạn đã hoàn thành xuất sắc tất cả 10 Cửa Ải và tiêu diệt Trùm Ma Vương Tối Cao!";
+            } else {
+                title.innerText = "THẤT BẠI!";
+                title.className = "text-4xl font-extrabold font-cinzel text-red-500 mb-2";
+                desc.innerText = "Hero của bạn đã gục ngã trước cạm bẫy vương quốc Aether.";
+            }
+
+            modal.classList.remove('hidden');
+        }
+
+        /* ----------------------------------------------------
+           13. ENTITY SPAWN & MAIN ANIMATION LOOP
+        ---------------------------------------------------- */
+        function spawnGameEntities() {
+            if (player.mesh) scene.remove(player.mesh);
+            if (teammate.mesh) scene.remove(teammate.mesh);
+            if (player.droneMesh) scene.remove(player.droneMesh);
+
+            player.type = selectedHeroKey;
+            player.level = 1;
+            player.gold = 0;
+            player.hp = HERO_TYPES[selectedHeroKey].hp;
+            player.maxHp = HERO_TYPES[selectedHeroKey].hp;
+            player.baseSpeed = HERO_TYPES[selectedHeroKey].speed;
+            
+            player.itemLevels = {
+                SPIKE_ARMOR: 0,
+                DRONE: 0,
+                SWORD_UPGRADE: 0,
+                SPEED_BOOTS: 0
+            };
+            player.pos.set(0, 0, 0);
+
+            const { group: pGroup, swordMesh: pSword } = createHeroMesh(player.type);
+            player.mesh = pGroup;
+            player.swordMesh = pSword;
+            scene.add(player.mesh);
+
+            if (gameMode === 'ONLINE') {
+                teammate.hp = HERO_TYPES[teammate.type].hp;
+                teammate.maxHp = HERO_TYPES[teammate.type].hp;
+                teammate.pos.set(3, 0, 3);
+                
+                const { group: tGroup, swordMesh: tSword } = createHeroMesh(teammate.type);
+                teammate.mesh = tGroup;
+                teammate.swordMesh = tSword;
+                scene.add(teammate.mesh);
+
+                const allyData = HERO_TYPES[teammate.type];
+                document.getElementById('hud-ally-name').innerText = allyData.name;
+                document.getElementById('hud-ally-icon').className = `fa-solid ${allyData.icon}`;
+                document.getElementById('hud-ally-hp-bar').style.width = '100%';
+                document.getElementById('hud-ally-hp-text').innerText = `${teammate.hp} / ${teammate.maxHp}`;
+            }
+
+            const heroData = HERO_TYPES[player.type];
+            document.getElementById('hud-hero-name').innerText = heroData.name;
+            document.getElementById('hud-hero-icon').className = `fa-solid ${heroData.icon}`;
+            updatePlayerHUD();
+
+            document.getElementById('skill-name-q').innerText = heroData.skills.Q.name;
+            document.getElementById('skill-name-e').innerText = heroData.skills.E.name;
+            document.getElementById('skill-name-r').innerText = heroData.skills.R.name;
+
+            currentStageIndex = 0;
+            startCurrentStage();
+        }
+
+        function animate() {
+            requestAnimationFrame(animate);
+
+            const now = performance.now();
+            const delta = clock.getDelta();
+
+            frameCount++;
+            if (now >= fpsTimer + 1000) {
+                document.getElementById('val-fps').innerText = frameCount;
+                document.getElementById('val-ms').innerText = Math.round((now - lastFrameTime));
+                frameCount = 0;
+                fpsTimer = now;
+            }
+            lastFrameTime = now;
+
+            // Hiệu ứng cỏ lay động theo gió nhẹ
+            if (grassInstances.length > 0) {
+                const time = now * 0.002;
+                grassInstances.forEach(inst => {
+                    inst.rotation.y = Math.sin(time) * 0.02;
+                });
+            }
+
+            if (isGameRunning && !isPaused && !isShopping) {
+                updatePlayerMovement(delta);
+                updateProjectiles();
+                updateParticles();
+                updateMobsAI(delta);
+                syncMultiplayerState();
+            }
+
+            renderer.render(scene, camera);
+        }
+
+        window.onload = function() {
+            initThreeScene();
+            animate();
+        };
+    </script>
+</body>
+</html>
