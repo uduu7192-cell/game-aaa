@@ -1,0 +1,1759 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AETHER REALMS - AAA 3D Combat Arena</title>
+
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    
+    <!-- Three.js -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    
+    <!-- Font Awesome Icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    
+    <!-- PeerJS for Real P2P Realtime Online Multiplayer -->
+    <script src="https://unpkg.com/peerjs@1.5.2/dist/peerjs.min.js"></script>
+
+    <!-- Firebase SDK (For Relay Sync Fallback across different devices/networks) -->
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
+        import { getDatabase, ref, set, onValue, remove } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-database.js";
+
+        // Optional Demo Firebase Config for Global Fallback Signaling
+        const firebaseConfig = {
+            databaseURL: "https://aether-realms-default-rtdb.firebaseio.com"
+        };
+
+        try {
+            const app = initializeApp(firebaseConfig);
+            window.fbDb = getDatabase(app);
+            window.fbRef = ref;
+            window.fbSet = set;
+            window.fbOnValue = onValue;
+            window.fbRemove = remove;
+            console.log("Firebase Fallback Relay initialized.");
+        } catch(e) {
+            console.warn("Firebase fallback active in offline mode.");
+        }
+    </script>
+    
+    <!-- Google Fonts -->
+    <link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@600;800;900&family=Rajdhani:wght@500;600;700&display=swap" rel="stylesheet">
+
+    <style>
+        body {
+            margin: 0;
+            overflow: hidden;
+            font-family: 'Rajdhani', sans-serif;
+            background-color: #030712;
+            color: #f3f4f6;
+            user-select: none;
+        }
+
+        .font-cinzel { font-family: 'Cinzel', serif; }
+
+        .glass-panel {
+            background: rgba(10, 15, 30, 0.88);
+            backdrop-filter: blur(16px);
+            border: 1px solid rgba(255, 255, 255, 0.12);
+            box-shadow: 0 20px 50px rgba(0, 0, 0, 0.8);
+        }
+
+        .glass-button {
+            background: linear-gradient(135deg, rgba(255,255,255,0.08) 0%, rgba(255,255,255,0.02) 100%);
+            border: 1px solid rgba(255, 255, 255, 0.15);
+            transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+
+        .glass-button:hover {
+            border-color: rgba(234, 179, 8, 0.8);
+            box-shadow: 0 0 25px rgba(234, 179, 8, 0.35);
+            transform: translateY(-2px);
+        }
+
+        .glass-button-active {
+            border-color: #eab308;
+            background: linear-gradient(135deg, rgba(234, 179, 8, 0.25) 0%, rgba(234, 179, 8, 0.08) 100%);
+            box-shadow: 0 0 30px rgba(234, 179, 8, 0.5);
+        }
+
+        ::-webkit-scrollbar { width: 6px; }
+        ::-webkit-scrollbar-track { background: rgba(0,0,0,0.2); }
+        ::-webkit-scrollbar-thumb { background: rgba(234, 179, 8, 0.4); border-radius: 3px; }
+
+        #crosshair {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            width: 16px;
+            height: 16px;
+            transform: translate(-50%, -50%);
+            pointer-events: none;
+        }
+
+        #crosshair::before, #crosshair::after {
+            content: '';
+            position: absolute;
+            background: rgba(56, 189, 248, 0.95);
+            box-shadow: 0 0 10px rgba(56, 189, 248, 0.9);
+        }
+
+        #crosshair::before { top: 7px; left: -10px; width: 36px; height: 2px; }
+        #crosshair::after { top: -10px; left: 7px; width: 2px; height: 36px; }
+
+        #crosshair-dot {
+            position: absolute;
+            top: 6px;
+            left: 6px;
+            width: 4px;
+            height: 4px;
+            background: #facc15;
+            border-radius: 50%;
+            box-shadow: 0 0 8px #facc15;
+        }
+
+        .vignette {
+            position: fixed;
+            top: 0; left: 0; width: 100%; height: 100%;
+            box-shadow: 0 0 140px rgba(0, 0, 0, 0.9) inset;
+            pointer-events: none;
+        }
+
+        .dmg-text {
+            position: absolute;
+            font-weight: 900;
+            font-family: 'Cinzel', serif;
+            pointer-events: none;
+            animation: floatUp 0.8s ease-out forwards;
+            text-shadow: 0 0 10px rgba(0,0,0,0.9);
+        }
+
+        @keyframes floatUp {
+            0% { opacity: 1; transform: translate(-50%, 0) scale(1.4); }
+            100% { opacity: 0; transform: translate(-50%, -70px) scale(0.8); }
+        }
+    </style>
+</head>
+<body class="bg-black select-none overflow-hidden">
+
+    <!-- CANVAS CONTAINER -->
+    <div id="canvas-container" class="absolute inset-0 z-0"></div>
+    <div class="vignette z-10"></div>
+
+    <!-- DAMAGE TEXT CONTAINER -->
+    <div id="damage-container" class="absolute inset-0 pointer-events-none z-15"></div>
+
+    <!-- FPS COUNTER OVERLAY -->
+    <div id="fps-counter" class="absolute top-4 left-4 z-20 font-mono text-xs bg-black/70 backdrop-blur border border-amber-500/30 text-amber-400 px-3 py-1.5 rounded-lg shadow-lg flex items-center gap-3">
+        <div><i class="fa-solid fa-gauge-high mr-1"></i> <span id="val-fps" class="font-bold text-white">60</span> FPS</div>
+        <div class="text-gray-500">|</div>
+        <div><span id="val-ms" class="text-xs text-gray-300">16</span> ms</div>
+        <div class="text-gray-500">|</div>
+        <div class="text-[10px] text-cyan-300"><span id="val-particles">0</span> FX</div>
+    </div>
+
+    <!-- PAUSE / ESC OVERLAY -->
+    <div id="pause-overlay" class="absolute inset-0 z-25 bg-black/60 backdrop-blur-md flex items-center justify-center hidden pointer-events-auto">
+        <div class="p-8 rounded-2xl glass-panel max-w-md w-full text-center border border-amber-500/40">
+            <h2 class="text-3xl font-black font-cinzel text-amber-400 mb-2">TẠM DỪNG TRẬN ĐẤU</h2>
+            <p class="text-xs text-gray-300 mb-6">Xoay góc nhìn bằng chuột. Nhấn ESC để mở/khóa con trỏ chuột.</p>
+            <div class="flex flex-col gap-3">
+                <button onclick="resumeGame()" class="py-3 bg-amber-500 hover:bg-amber-400 text-black font-bold rounded-xl uppercase tracking-wider transition-all cursor-pointer">
+                    Tiếp Tục Trận Đấu
+                </button>
+                <button onclick="returnToMenu()" class="py-3 bg-red-600/80 hover:bg-red-500 text-white font-bold rounded-xl uppercase tracking-wider transition-all cursor-pointer">
+                    Thoát Ra Menu
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- MAIN MENU OVERLAY -->
+    <div id="main-menu" class="absolute inset-0 z-20 flex items-center justify-center bg-black/60 backdrop-blur-sm transition-opacity duration-500">
+        <div class="max-w-4xl w-full mx-4 p-8 rounded-2xl glass-panel relative overflow-hidden text-center">
+            
+            <!-- Header Title -->
+            <div class="mb-6">
+                <h1 class="text-5xl md:text-7xl font-extrabold font-cinzel text-transparent bg-clip-text bg-gradient-to-r from-amber-200 via-yellow-400 to-amber-600 drop-shadow-[0_5px_20px_rgba(234,179,8,0.5)] tracking-wider">
+                    AETHER REALMS
+                </h1>
+                <p class="text-yellow-100/80 text-sm md:text-base tracking-widest uppercase mt-2 font-semibold">
+                    ĐẤU TRƯỜNG 3D AAA • HIGH GRAPHICS & MULTIPLAYER
+                </p>
+            </div>
+
+            <!-- NICKNAME INPUT BLOCK -->
+            <div class="mb-6 max-w-sm mx-auto">
+                <label class="block text-xs uppercase font-bold text-amber-400 mb-1">Tên Dấu Ấn Chiến Binh (Nickname)</label>
+                <input id="player-nickname-input" type="text" value="Chiến Binh Aether" maxlength="16" class="w-full bg-black/70 border border-amber-500/50 rounded-xl px-4 py-2 text-center text-amber-200 font-bold focus:outline-none focus:border-amber-400 shadow-inner">
+            </div>
+
+            <!-- HERO SELECTION BAR -->
+            <div class="mb-6">
+                <h3 class="text-xs uppercase tracking-widest text-amber-400/80 mb-3 font-bold">Chọn Tướng Với Ngoại Hình & Độc Quyền Chiêu Thức</h3>
+                <div class="grid grid-cols-2 md:grid-cols-4 gap-3">
+                    <button onclick="selectHero('WARRIOR')" id="hero-WARRIOR" class="hero-btn glass-button p-3 rounded-xl flex flex-col items-center gap-2 group glass-button-active">
+                        <i class="fa-solid fa-sword text-2xl text-amber-400 group-hover:scale-110 transition-transform"></i>
+                        <span class="font-bold text-sm">Kiếm Sĩ Hoàng Gia</span>
+                        <span class="text-[10px] text-gray-400">Thánh Kiếm • Vệt Trảm • Phong Ma Vũ</span>
+                    </button>
+                    <button onclick="selectHero('ARCHER')" id="hero-ARCHER" class="hero-btn glass-button p-3 rounded-xl flex flex-col items-center gap-2 group">
+                        <i class="fa-solid fa-bow-arrow text-2xl text-emerald-400 group-hover:scale-110 transition-transform"></i>
+                        <span class="font-bold text-sm">Cung Thủ Tiên Tộc</span>
+                        <span class="text-[10px] text-gray-400">Áo Choàng • Mưa Tên • Tên Thần</span>
+                    </button>
+                    <button onclick="selectHero('GUNNER')" id="hero-GUNNER" class="hero-btn glass-button p-3 rounded-xl flex flex-col items-center gap-2 group">
+                        <i class="fa-solid fa-gun text-2xl text-red-400 group-hover:scale-110 transition-transform"></i>
+                        <span class="font-bold text-sm">Xạ Thủ Plasma</span>
+                        <span class="text-[10px] text-gray-400">Giáp Động Lực • Dual Gun • Tên Lửa</span>
+                    </button>
+                    <button onclick="selectHero('MAGE')" id="hero-MAGE" class="hero-btn glass-button p-3 rounded-xl flex flex-col items-center gap-2 group">
+                        <i class="fa-solid fa-wand-magic-sparkles text-2xl text-purple-400 group-hover:scale-110 transition-transform"></i>
+                        <span class="font-bold text-sm">Pháp Sư Tinh Tú</span>
+                        <span class="text-[10px] text-gray-400">Gậy Phép • Hố Đen • Sét Đỉnh Vực</span>
+                    </button>
+                </div>
+            </div>
+
+            <!-- MODE SELECTION / ONLINE ROOM -->
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
+                <!-- VS AI MODE -->
+                <button type="button" onclick="startSinglePlayer(event)" class="glass-button p-5 rounded-xl text-left flex flex-col justify-between group relative overflow-hidden border-amber-500/30 cursor-pointer">
+                    <div>
+                        <div class="text-amber-400 font-bold text-lg mb-1 flex items-center justify-between">
+                            Chơi Offline (VS AI)
+                            <i class="fa-solid fa-robot text-xl text-amber-400/80 group-hover:scale-125 transition-transform"></i>
+                        </div>
+                        <p class="text-xs text-gray-300">Vào ngay trận đấu 1v1 với AI mà không cần thông qua phòng chờ!</p>
+                    </div>
+                    <span class="mt-4 text-xs font-bold text-amber-300 uppercase tracking-wider flex items-center gap-1">
+                        Chiến Đấu Ngay <i class="fa-solid fa-play"></i>
+                    </span>
+                </button>
+
+                <!-- CREATE ONLINE ROOM -->
+                <button type="button" onclick="createOnlineRoom(event)" class="glass-button p-5 rounded-xl text-left flex flex-col justify-between group relative overflow-hidden border-cyan-500/30 cursor-pointer">
+                    <div>
+                        <div class="text-cyan-400 font-bold text-lg mb-1 flex items-center justify-between">
+                            Tạo Phòng Online
+                            <i class="fa-solid fa-plus-circle text-xl text-cyan-400/80 group-hover:scale-125 transition-transform"></i>
+                        </div>
+                        <p class="text-xs text-gray-300">Mở phòng chờ Co-Op P2P + Relay, mời đồng đội nhập mã 6 số cùng vượt ải.</p>
+                    </div>
+                    <span class="mt-4 text-xs font-bold text-cyan-300 uppercase tracking-wider flex items-center gap-1">
+                        Mở Phòng Chờ <i class="fa-solid fa-arrow-right"></i>
+                    </span>
+                </button>
+
+                <!-- JOIN ONLINE ROOM -->
+                <div class="glass-button p-5 rounded-xl text-left flex flex-col justify-between border-purple-500/30">
+                    <div>
+                        <div class="text-purple-400 font-bold text-lg mb-1 flex items-center justify-between">
+                            Tham Gia Phòng
+                            <i class="fa-solid fa-right-to-bracket text-xl text-purple-400/80"></i>
+                        </div>
+                        <input id="join-room-input" type="text" placeholder="Nhập mã 6 số..." class="w-full bg-black/60 border border-purple-500/40 rounded-lg px-3 py-1.5 text-sm text-purple-200 placeholder-gray-500 focus:outline-none focus:border-purple-400 mt-2 uppercase tracking-widest font-mono">
+                    </div>
+                    <button type="button" onclick="joinOnlineRoom(event)" class="mt-3 w-full py-2 bg-purple-600/80 hover:bg-purple-500 text-white rounded-lg text-xs font-bold uppercase tracking-wider transition-colors shadow-lg shadow-purple-600/30 cursor-pointer">
+                        Vào Phòng Chờ
+                    </button>
+                </div>
+            </div>
+
+            <!-- STATUS/NOTIFICATION BAR -->
+            <div id="menu-status" class="text-xs text-amber-300/90 font-mono min-h-[20px] bg-black/40 py-1.5 px-3 rounded-lg border border-white/5">
+                Sẵn sàng chiến đấu. Hãy nhập Tên, chọn Tướng và Chế độ chơi!
+            </div>
+
+            <!-- CONTROLS GUIDE -->
+            <div class="mt-4 pt-3 border-t border-white/10 flex flex-wrap justify-center gap-4 text-[11px] text-gray-300 uppercase tracking-wider">
+                <div><span class="px-1.5 py-0.5 bg-amber-500/20 border border-amber-500/40 rounded text-amber-300 font-bold">WASD</span> Di chuyển</div>
+                <div><span class="px-1.5 py-0.5 bg-amber-500/20 border border-amber-500/40 rounded text-amber-300 font-bold">Chuột</span> Xoay Góc Nhìn 360°</div>
+                <div><span class="px-1.5 py-0.5 bg-amber-500/20 border border-amber-500/40 rounded text-amber-300 font-bold">ESC</span> Khóa/Mở Con Trỏ</div>
+                <div><span class="px-1.5 py-0.5 bg-amber-500/20 border border-amber-500/40 rounded text-amber-300 font-bold">Chuột Trái</span> Tấn Công Thường</div>
+                <div><span class="px-1.5 py-0.5 bg-amber-500/20 border border-amber-500/40 rounded text-amber-300 font-bold">Q / E / R</span> Chiêu Thức Độc Quyền</div>
+                <div><span class="px-1.5 py-0.5 bg-amber-500/20 border border-amber-500/40 rounded text-amber-300 font-bold">Space / Shift</span> Nhảy / Lướt</div>
+            </div>
+
+        </div>
+    </div>
+
+    <!-- LOBBY ROOM OVERLAY (ONLINE ROOM) -->
+    <div id="lobby-modal" class="absolute inset-0 z-25 flex items-center justify-center bg-black/80 backdrop-blur-md hidden">
+        <div class="p-8 rounded-2xl glass-panel text-center max-w-2xl w-full mx-4 border border-cyan-500/50 shadow-2xl relative">
+            <div class="flex justify-between items-center mb-6 border-b border-white/10 pb-4">
+                <div>
+                    <h2 class="text-2xl font-black font-cinzel text-cyan-400 text-left">PHÒNG CHỜ CO-OP VƯỢT ẢI</h2>
+                    <p class="text-xs text-gray-400 text-left">Kết nối đồng đội liên thiết bị để cùng nhau chinh phục Aether!</p>
+                </div>
+                <div class="bg-black/60 border border-cyan-500/60 rounded-xl px-4 py-2 font-mono text-cyan-300">
+                    MÃ PHÒNG: <span id="lobby-room-code" class="text-xl font-bold text-white select-all">------</span>
+                </div>
+            </div>
+
+            <!-- PLAYER SLOTS -->
+            <div class="grid grid-cols-2 gap-6 mb-6">
+                <!-- HOST SLOT -->
+                <div id="slot-host" class="p-4 rounded-xl border border-amber-500/40 bg-amber-500/5 flex flex-col items-center gap-2">
+                    <span class="text-[10px] font-bold text-amber-400 uppercase tracking-widest px-2 py-0.5 bg-amber-500/20 rounded border border-amber-500/40">HOST (Chủ Phòng)</span>
+                    <div id="host-name" class="font-bold text-lg text-amber-200">Đang cập nhật...</div>
+                    <div id="host-hero-name" class="text-xs text-gray-300 font-mono">Tướng: Chưa chọn</div>
+                    <div id="host-status" class="mt-2 text-xs font-bold text-emerald-400 border border-emerald-500/40 px-3 py-1 rounded-full bg-emerald-500/10">SẴN SÀNG</div>
+                </div>
+
+                <!-- GUEST SLOT -->
+                <div id="slot-guest" class="p-4 rounded-xl border border-purple-500/40 bg-purple-500/5 flex flex-col items-center gap-2">
+                    <span class="text-[10px] font-bold text-purple-400 uppercase tracking-widest px-2 py-0.5 bg-purple-500/20 rounded border border-purple-500/40">GUEST (Đồng Đội)</span>
+                    <div id="guest-name" class="font-bold text-lg text-gray-400">Đang chờ người tham gia...</div>
+                    <div id="guest-hero-name" class="text-xs text-gray-400 font-mono">Tướng: --</div>
+                    <div id="guest-status" class="mt-2 text-xs font-bold text-gray-500 border border-gray-600/40 px-3 py-1 rounded-full bg-black/40">CHƯA VÀO PHÒNG</div>
+                </div>
+            </div>
+
+            <!-- BUTTON ACTIONS -->
+            <div class="flex gap-4">
+                <button onclick="leaveLobby()" class="flex-1 py-3 bg-red-900/60 hover:bg-red-800 text-red-200 font-bold rounded-xl uppercase tracking-wider text-sm transition-all border border-red-500/30 cursor-pointer">
+                    Rời Phòng
+                </button>
+
+                <button id="btn-toggle-ready" onclick="toggleGuestReady()" class="flex-1 py-3 bg-purple-600 hover:bg-purple-500 text-white font-bold rounded-xl uppercase tracking-wider text-sm transition-all shadow-lg shadow-purple-600/30 hidden cursor-pointer">
+                    Đổi Sẵn Sàng
+                </button>
+
+                <button id="btn-start-game" onclick="hostStartOnlineGame()" class="flex-1 py-3 bg-gradient-to-r from-amber-500 to-yellow-500 text-black font-extrabold rounded-xl uppercase tracking-wider text-sm transition-all shadow-lg shadow-amber-500/30 opacity-50 cursor-not-allowed" disabled>
+                    Bắt Đầu Vượt Ải
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- IN-GAME HUD OVERLAY -->
+    <div id="game-hud" class="absolute inset-0 z-10 pointer-events-none hidden">
+        <!-- Crosshair Center with Aim Dot -->
+        <div id="crosshair">
+            <div id="crosshair-dot"></div>
+        </div>
+
+        <!-- STAGE & WAVE DISPLAY (TOP CENTER) -->
+        <div class="absolute top-4 left-1/2 -translate-x-1/2 bg-black/80 backdrop-blur-md border border-amber-500/50 rounded-2xl px-6 py-2 text-center shadow-2xl">
+            <div id="hud-stage-title" class="text-amber-400 font-cinzel font-black text-lg tracking-wider">CỬA ẢI 1: KHAI MỎ VỰC CỔ</div>
+            <div class="text-xs text-gray-300 font-mono flex items-center justify-center gap-3">
+                <span>QUÁI CÒN LẠI: <strong id="hud-mobs-left" class="text-red-400">0</strong></span>
+                <span>|</span>
+                <span>ẢI HIỆN TẠI: <strong id="hud-stage-num" class="text-yellow-300">1 / 5</strong></span>
+            </div>
+        </div>
+
+        <!-- Top Left: Player Status Bar -->
+        <div class="absolute top-16 left-6 flex items-center gap-4">
+            <div class="w-14 h-14 rounded-xl bg-slate-900/90 border-2 border-amber-500/80 flex items-center justify-center text-amber-400 text-2xl shadow-xl backdrop-blur-md">
+                <i id="hud-hero-icon" class="fa-solid fa-sword"></i>
+            </div>
+            <div class="flex flex-col gap-1 w-64">
+                <div class="flex justify-between items-center text-xs font-bold">
+                    <span id="hud-hero-name" class="text-amber-300 font-cinzel tracking-wider">KIẾM SĨ</span>
+                    <span id="hud-hp-text" class="text-white font-mono">1800 / 1800</span>
+                </div>
+                <!-- Health Bar -->
+                <div class="w-full h-3.5 bg-black/70 rounded-full border border-white/20 overflow-hidden p-0.5 shadow-inner">
+                    <div id="hud-hp-bar" class="h-full bg-gradient-to-r from-red-600 via-emerald-500 to-green-400 rounded-full w-full transition-all duration-150"></div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Top Right: Teammate Status Bar & Room Code -->
+        <div class="absolute top-16 right-6 flex flex-col items-end gap-3">
+            <!-- Room Info -->
+            <div id="hud-room-tag" class="px-4 py-1.5 bg-black/80 border border-cyan-500/40 rounded-xl text-xs font-mono text-cyan-300 hidden backdrop-blur shadow-lg">
+                MÃ PHÒNG ONLINE: <span id="hud-room-code" class="font-bold text-white text-sm">------</span>
+            </div>
+
+            <!-- Teammate Status -->
+            <div id="hud-ally-container" class="flex items-center gap-4 opacity-95 hidden">
+                <div class="flex flex-col gap-1 w-64 items-end">
+                    <div class="flex justify-between items-center text-xs font-bold w-full">
+                        <span id="hud-ally-hp-text" class="text-white font-mono">1500 / 1500</span>
+                        <span id="hud-ally-name" class="text-cyan-400 font-cinzel tracking-wider">ĐỒNG ĐỘI</span>
+                    </div>
+                    <div class="w-full h-3.5 bg-black/70 rounded-full border border-white/20 overflow-hidden p-0.5 shadow-inner">
+                        <div id="hud-ally-hp-bar" class="h-full bg-gradient-to-r from-cyan-600 to-cyan-400 rounded-full w-full transition-all duration-150"></div>
+                    </div>
+                </div>
+                <div class="w-14 h-14 rounded-xl bg-slate-900/90 border-2 border-cyan-500/80 flex items-center justify-center text-cyan-400 text-2xl shadow-xl backdrop-blur-md">
+                    <i id="hud-ally-icon" class="fa-solid fa-user-group"></i>
+                </div>
+            </div>
+        </div>
+
+        <!-- Bottom Center: Skill Bar -->
+        <div class="absolute bottom-8 left-1/2 -translate-x-1/2 flex items-center gap-4 pointer-events-auto">
+            <!-- Skill Q -->
+            <div class="relative w-16 h-16 rounded-2xl bg-slate-900/90 border border-amber-500/50 flex flex-col items-center justify-center text-amber-400 shadow-xl overflow-hidden backdrop-blur-md">
+                <div id="cd-q" class="absolute bottom-0 left-0 right-0 bg-black/80 cd-overlay" style="height: 0%;"></div>
+                <i id="skill-icon-q" class="fa-solid fa-sword text-xl"></i>
+                <span id="skill-name-q" class="text-[9px] text-gray-300 mt-1 font-bold">Skill Q</span>
+                <span class="absolute top-1 left-2 font-mono text-[10px] font-bold text-amber-400">Q</span>
+            </div>
+
+            <!-- Skill E -->
+            <div class="relative w-16 h-16 rounded-2xl bg-slate-900/90 border border-amber-500/50 flex flex-col items-center justify-center text-amber-400 shadow-xl overflow-hidden backdrop-blur-md">
+                <div id="cd-e" class="absolute bottom-0 left-0 right-0 bg-black/80 cd-overlay" style="height: 0%;"></div>
+                <i id="skill-icon-e" class="fa-solid fa-person-running text-xl"></i>
+                <span id="skill-name-e" class="text-[9px] text-gray-300 mt-1 font-bold">Skill E</span>
+                <span class="absolute top-1 left-2 font-mono text-[10px] font-bold text-amber-400">E</span>
+            </div>
+
+            <!-- Skill R (Ultimate) -->
+            <div class="relative w-20 h-20 rounded-2xl bg-slate-900/90 border-2 border-yellow-400/80 flex flex-col items-center justify-center text-yellow-400 shadow-2xl overflow-hidden backdrop-blur-md">
+                <div id="cd-r" class="absolute bottom-0 left-0 right-0 bg-black/80 cd-overlay" style="height: 0%;"></div>
+                <i id="skill-icon-r" class="fa-solid fa-burst text-2xl"></i>
+                <span id="skill-name-r" class="text-[10px] text-yellow-200 mt-1 font-extrabold uppercase">Tuyệt Kỹ</span>
+                <span class="absolute top-1 left-2 font-mono text-[11px] font-bold text-yellow-300">R</span>
+            </div>
+        </div>
+    </div>
+
+    <!-- GAME OVER MODAL -->
+    <div id="game-over-modal" class="absolute inset-0 z-30 flex items-center justify-center bg-black/80 backdrop-blur-md hidden">
+        <div class="p-8 rounded-2xl glass-panel text-center max-w-sm w-full border border-amber-500/50 shadow-2xl">
+            <h2 id="game-over-title" class="text-4xl font-extrabold font-cinzel text-amber-400 mb-2">CHIẾN THẮNG!</h2>
+            <p id="game-over-desc" class="text-xs text-gray-300 mb-6">Bạn đã hoàn thành các thử thách!</p>
+            <button onclick="returnToMenu()" class="w-full py-3 bg-amber-500 hover:bg-amber-400 text-black font-bold rounded-xl uppercase tracking-wider transition-colors shadow-lg shadow-amber-500/30 cursor-pointer">
+                Quay Về Menu
+            </button>
+        </div>
+    </div>
+
+    <!-- MAIN GAME LOGIC -->
+    <script>
+        /* ----------------------------------------------------
+           1. HERO CLASS CONFIGURATIONS & HIGH DAMAGE STAGES
+        ---------------------------------------------------- */
+        const HERO_TYPES = {
+            WARRIOR: {
+                name: 'Kiếm Sĩ Hoàng Gia',
+                icon: 'fa-sword',
+                color: 0x3b82f6,
+                hp: 1800,
+                speed: 16,
+                skills: {
+                    Q: { name: 'Sóng Kiếm Hoàng Gia', cd: 1800, damage: 380, icon: 'fa-sword' },
+                    E: { name: 'Lướt Trảm Kiếm', cd: 3500, damage: 450, icon: 'fa-person-running' },
+                    R: { name: 'Phong Ma Vũ Trảm', cd: 7500, damage: 1200, icon: 'fa-burst' }
+                }
+            },
+            ARCHER: {
+                name: 'Cung Thủ Tiên Tộc',
+                icon: 'fa-bow-arrow',
+                color: 0x10b981,
+                hp: 1200,
+                speed: 18,
+                skills: {
+                    Q: { name: 'Mưa Tên Thần', cd: 2200, damage: 320, icon: 'fa-arrows-to-dot' },
+                    E: { name: 'Bắn Tốc Độ', cd: 3200, damage: 420, icon: 'fa-feather' },
+                    R: { name: 'Tên Thần Xuyên Thấu', cd: 7000, damage: 1100, icon: 'fa-crosshairs' }
+                }
+            },
+            GUNNER: {
+                name: 'Xạ Thủ Plasma',
+                icon: 'fa-gun',
+                color: 0xef4444,
+                hp: 1150,
+                speed: 17,
+                skills: {
+                    Q: { name: 'Lựu Đạn Plasma', cd: 2500, damage: 360, icon: 'fa-bomb' },
+                    E: { name: 'Xả Đạn Liên Thanh', cd: 3800, damage: 480, icon: 'fa-bars-staggered' },
+                    R: { name: 'Tên Lửa Diệt Chủng', cd: 8000, damage: 1350, icon: 'fa-rocket' }
+                }
+            },
+            MAGE: {
+                name: 'Pháp Sư Tinh Tú',
+                icon: 'fa-wand-magic-sparkles',
+                color: 0xa855f7,
+                hp: 1100,
+                speed: 15,
+                skills: {
+                    Q: { name: 'Cầu Lửa Siêu Nổ', cd: 2000, damage: 400, icon: 'fa-fire-flame-curved' },
+                    E: { name: 'Bão Sấm Sét', cd: 4500, damage: 550, icon: 'fa-bolt-lightning' },
+                    R: { name: 'Hố Đen Vũ Trụ', cd: 8500, damage: 1500, icon: 'fa-atom' }
+                }
+            }
+        };
+
+        const STAGES = [
+            { id: 1, title: 'ẢI 1: KHAI MỎ VỰC CỔ', mobCount: 5, mobHp: 650, speed: 10, isBossStage: false },
+            { id: 2, title: 'ẢI 2: RỪNG SƯƠNG BỎ HOÁNG', mobCount: 7, mobHp: 1050, speed: 12, isBossStage: false },
+            { id: 3, title: 'ẢI 3: THÁP CỔ AETHER', mobCount: 9, mobHp: 1600, speed: 14, isBossStage: false },
+            { id: 4, title: 'ẢI 4: ĐỘNG QUỶ TINH TÚ', mobCount: 12, mobHp: 2200, speed: 15, isBossStage: false },
+            { id: 5, title: 'ẢI CUỐI: TRÙM CUỐI MA VƯƠNG', mobCount: 1, mobHp: 8500, speed: 16, isBossStage: true }
+        ];
+
+        let currentStageIndex = 0;
+        let activeMobs = [];
+
+        // Engine State Variables
+        let scene, camera, renderer;
+        let selectedHeroKey = 'WARRIOR';
+        let gameMode = 'VS_AI';
+        let isGameRunning = false;
+        let isPaused = false;
+        let lastFrameTime = performance.now();
+        let frameCount = 0;
+        let fpsTimer = performance.now();
+
+        // 3D Aiming Orbit Camera Controls
+        let camPitch = 0.25;
+        let camYaw = 0;
+        let camDistance = 7.5;
+        let camRightOffset = 1.8;
+
+        // Player & Teammate Structures
+        let player = {
+            mesh: null,
+            swordMesh: null,
+            swordTrailMesh: null,
+            type: 'WARRIOR',
+            hp: 1800,
+            maxHp: 1800,
+            pos: new THREE.Vector3(0, 0, 0),
+            rotY: 0,
+            vy: 0,
+            isGrounded: true,
+            isAttacking: false,
+            attackSwingAnim: 0,
+            cdQ: 0, cdE: 0, cdR: 0
+        };
+
+        let teammate = {
+            mesh: null,
+            swordMesh: null,
+            type: 'MAGE',
+            hp: 1500,
+            maxHp: 1500,
+            pos: new THREE.Vector3(3, 0, 3),
+            rotY: 0
+        };
+
+        let projectiles = [];
+        let particleEffects = [];
+        let clock = new THREE.Clock();
+
+        // Keyboard Inputs
+        const keys = { w: false, a: false, s: false, d: false, space: false, shift: false };
+        let mouseLocked = false;
+
+        // WebRTC & Hybrid Firebase Signaling Relay State
+        let playerNickname = 'Chiến Binh Aether';
+        let peer = null;
+        let activePeerConn = null;
+        let roomCode = '';
+        let isHost = false;
+        let fbRoomUnsub = null;
+
+        let lobbyState = {
+            hostName: '',
+            hostHero: 'WARRIOR',
+            hostReady: true,
+            guestName: '',
+            guestHero: 'MAGE',
+            guestReady: false,
+            guestConnected: false
+        };
+
+        /* ----------------------------------------------------
+           2. MAP & TERRAIN GRAPHICS
+        ---------------------------------------------------- */
+        function getTerrainHeight(x, z) {
+            return Math.sin(x * 0.05) * Math.cos(z * 0.05) * 1.8 + Math.sin(x * 0.02 + z * 0.03) * 2.5;
+        }
+
+        function createTerrainMap() {
+            const size = 320;
+            const segments = 140;
+            const geometry = new THREE.PlaneGeometry(size, size, segments, segments);
+            geometry.rotateX(-Math.PI / 2);
+
+            const posAttr = geometry.attributes.position;
+            const colors = [];
+            const col1 = new THREE.Color(0x1e293b);
+            const col2 = new THREE.Color(0x0f172a);
+            const col3 = new THREE.Color(0x334155);
+
+            for (let i = 0; i < posAttr.count; i++) {
+                const x = posAttr.getX(i);
+                const z = posAttr.getZ(i);
+                const h = getTerrainHeight(x, z);
+                posAttr.setY(i, h);
+
+                const mixCol = h > 1.5 ? col3 : (h < -0.5 ? col2 : col1);
+                colors.push(mixCol.r, mixCol.g, mixCol.b);
+            }
+            geometry.setAttribute('color', new THREE.Float32BufferAttribute(colors, 3));
+            geometry.computeVertexNormals();
+
+            const terrainMat = new THREE.MeshStandardMaterial({
+                vertexColors: true,
+                roughness: 0.75,
+                metalness: 0.25,
+                flatShading: false
+            });
+
+            const terrain = new THREE.Mesh(geometry, terrainMat);
+            terrain.receiveShadow = true;
+            scene.add(terrain);
+
+            // Environment Details
+            const rockGeo = new THREE.DodecahedronGeometry(1.6, 1);
+            const rockMat = new THREE.MeshStandardMaterial({ color: 0x475569, roughness: 0.8 });
+            
+            const crystalGeo = new THREE.OctahedronGeometry(1.2, 0);
+            const crystalMat = new THREE.MeshStandardMaterial({ 
+                color: 0x38bdf8, 
+                emissive: 0x0284c7, 
+                emissiveIntensity: 0.6,
+                roughness: 0.2, 
+                metalness: 0.9 
+            });
+
+            for (let i = 0; i < 70; i++) {
+                const rx = (Math.random() - 0.5) * 220;
+                const rz = (Math.random() - 0.5) * 220;
+                const ry = getTerrainHeight(rx, rz);
+
+                if (i % 5 === 0) {
+                    const crystal = new THREE.Mesh(crystalGeo, crystalMat);
+                    crystal.position.set(rx, ry + 1.2, rz);
+                    crystal.rotation.set(Math.random(), Math.random(), Math.random());
+                    crystal.scale.set(0.8, 1.8 + Math.random(), 0.8);
+                    crystal.castShadow = true;
+                    scene.add(crystal);
+                } else {
+                    const rock = new THREE.Mesh(rockGeo, rockMat);
+                    rock.position.set(rx, ry + 0.6, rz);
+                    const s = 0.6 + Math.random() * 1.8;
+                    rock.scale.set(s, s * (0.7 + Math.random() * 0.5), s);
+                    rock.rotation.y = Math.random() * Math.PI;
+                    rock.castShadow = true;
+                    rock.receiveShadow = true;
+                    scene.add(rock);
+                }
+            }
+        }
+
+        /* ----------------------------------------------------
+           3. THREE.JS SCENE INITIALIZATION
+        ---------------------------------------------------- */
+        function initThreeScene() {
+            const container = document.getElementById('canvas-container');
+            
+            scene = new THREE.Scene();
+            scene.background = new THREE.Color(0x060913);
+            scene.fog = new THREE.FogExp2(0x060913, 0.008);
+
+            camera = new THREE.PerspectiveCamera(62, window.innerWidth / window.innerHeight, 0.1, 600);
+
+            renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: "high-performance" });
+            renderer.setSize(window.innerWidth, window.innerHeight);
+            renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+            renderer.shadowMap.enabled = true;
+            renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+            renderer.toneMapping = THREE.ACESFilmicToneMapping;
+            renderer.toneMappingExposure = 1.35;
+            container.appendChild(renderer.domElement);
+
+            // Lighting Setup
+            const ambientLight = new THREE.AmbientLight(0x94a3b8, 0.7);
+            scene.add(ambientLight);
+
+            const sunLight = new THREE.DirectionalLight(0xfff5ea, 2.2);
+            sunLight.position.set(90, 140, 60);
+            sunLight.castShadow = true;
+            sunLight.shadow.mapSize.width = 2048;
+            sunLight.shadow.mapSize.height = 2048;
+            sunLight.shadow.camera.near = 10;
+            sunLight.shadow.camera.far = 320;
+            const d = 110;
+            sunLight.shadow.camera.left = -d;
+            sunLight.shadow.camera.right = d;
+            sunLight.shadow.camera.top = d;
+            sunLight.shadow.camera.bottom = -d;
+            scene.add(sunLight);
+
+            const skyLight = new THREE.HemisphereLight(0x38bdf8, 0x16a34a, 0.65);
+            scene.add(skyLight);
+
+            createTerrainMap();
+
+            window.addEventListener('resize', onWindowResize);
+            setupControls();
+        }
+
+        function onWindowResize() {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+        }
+
+        /* ----------------------------------------------------
+           4. MESH CREATION & SWORD HERO ANIMATION
+        ---------------------------------------------------- */
+        function createHeroMesh(type) {
+            const group = new THREE.Group();
+            const config = HERO_TYPES[type] || HERO_TYPES.WARRIOR;
+            const mat = new THREE.MeshStandardMaterial({ 
+                color: config.color, 
+                roughness: 0.3, 
+                metalness: 0.7 
+            });
+
+            // Body Armor
+            const bodyGeo = new THREE.CylinderGeometry(0.42, 0.25, 1.6, 14);
+            const body = new THREE.Mesh(bodyGeo, mat);
+            body.position.y = 0.8;
+            body.castShadow = true;
+            group.add(body);
+
+            // Head / Helmet
+            const headGeo = new THREE.SphereGeometry(0.32, 16, 16);
+            const headMat = new THREE.MeshStandardMaterial({ color: 0xfde047, metalness: 0.5, roughness: 0.3 });
+            const head = new THREE.Mesh(headGeo, headMat);
+            head.position.y = 1.85;
+            head.castShadow = true;
+            group.add(head);
+
+            let swordMeshRef = null;
+
+            if (type === 'WARRIOR') {
+                // KIẾM SĨ HOÀNG GIA - THÁNH KIẾM GLOWING
+                const swordGroup = new THREE.Group();
+                swordGroup.name = "swordGroup";
+
+                // Blade
+                const swordBladeGeo = new THREE.BoxGeometry(0.12, 1.8, 0.28);
+                const swordBladeMat = new THREE.MeshStandardMaterial({ 
+                    color: 0x93c5fd, 
+                    emissive: 0x3b82f6,
+                    emissiveIntensity: 0.8,
+                    metalness: 0.9, 
+                    roughness: 0.1 
+                });
+                const blade = new THREE.Mesh(swordBladeGeo, swordBladeMat);
+                blade.position.y = 0.9;
+                blade.castShadow = true;
+                swordGroup.add(blade);
+
+                // Handle / Hilt
+                const hiltGeo = new THREE.CylinderGeometry(0.06, 0.06, 0.4);
+                const hiltMat = new THREE.MeshStandardMaterial({ color: 0x78350f });
+                const hilt = new THREE.Mesh(hiltGeo, hiltMat);
+                hilt.position.y = -0.1;
+                swordGroup.add(hilt);
+
+                // Crossguard
+                const guardGeo = new THREE.BoxGeometry(0.6, 0.08, 0.12);
+                const guardMat = new THREE.MeshStandardMaterial({ color: 0xfacc15, metalness: 0.8 });
+                const guard = new THREE.Mesh(guardGeo, guardMat);
+                guard.position.y = 0.1;
+                swordGroup.add(guard);
+
+                swordGroup.position.set(0.55, 1.0, 0.1);
+                swordGroup.rotation.set(0.2, 0, -0.2);
+                group.add(swordGroup);
+
+                swordMeshRef = swordGroup;
+            } else if (type === 'GUNNER') {
+                const gunGeo = new THREE.BoxGeometry(0.22, 0.22, 0.9);
+                const gunMat = new THREE.MeshStandardMaterial({ color: 0x1e293b, metalness: 0.85, roughness: 0.2 });
+                const gun1 = new THREE.Mesh(gunGeo, gunMat);
+                gun1.position.set(0.45, 1.05, -0.4);
+                gun1.castShadow = true;
+                group.add(gun1);
+            } else if (type === 'MAGE') {
+                const staffGeo = new THREE.CylinderGeometry(0.04, 0.04, 2.3);
+                const staffMat = new THREE.MeshStandardMaterial({ color: 0x78350f, roughness: 0.6 });
+                const staff = new THREE.Mesh(staffGeo, staffMat);
+                staff.position.set(0.45, 1.05, -0.2);
+                
+                const orbGeo = new THREE.SphereGeometry(0.22, 12, 12);
+                const orbMat = new THREE.MeshStandardMaterial({ color: 0xc084fc, emissive: 0xa855f7, emissiveIntensity: 0.8 });
+                const orb = new THREE.Mesh(orbGeo, orbMat);
+                orb.position.set(0.45, 2.2, -0.2);
+                
+                group.add(staff);
+                group.add(orb);
+            } else if (type === 'ARCHER') {
+                const bowGeo = new THREE.TorusGeometry(0.65, 0.04, 8, 16, Math.PI);
+                const bowMat = new THREE.MeshStandardMaterial({ color: 0x15803d, roughness: 0.4 });
+                const bow = new THREE.Mesh(bowGeo, bowMat);
+                bow.position.set(0.45, 1.05, -0.2);
+                bow.castShadow = true;
+                group.add(bow);
+            }
+
+            return { group, swordMesh: swordMeshRef };
+        }
+
+        /* ----------------------------------------------------
+           5. CONTROLS & 3D AIMING CAMERA MOVEMENT
+        ---------------------------------------------------- */
+        function setupControls() {
+            window.addEventListener('keydown', (e) => {
+                const k = e.key.toLowerCase();
+                if (k === 'w') keys.w = true;
+                if (k === 'a') keys.a = true;
+                if (k === 's') keys.s = true;
+                if (k === 'd') keys.d = true;
+                if (e.code === 'Space') keys.space = true;
+                if (e.key === 'Shift') keys.shift = true;
+
+                if (isGameRunning && !isPaused) {
+                    if (k === 'q') triggerSkill('Q');
+                    if (k === 'e') triggerSkill('E');
+                    if (k === 'r') triggerSkill('R');
+                }
+
+                if (e.key === 'Escape') togglePauseMenu();
+            });
+
+            window.addEventListener('keyup', (e) => {
+                const k = e.key.toLowerCase();
+                if (k === 'w') keys.w = false;
+                if (k === 'a') keys.a = false;
+                if (k === 's') keys.s = false;
+                if (k === 'd') keys.d = false;
+                if (e.code === 'Space') keys.space = false;
+                if (e.key === 'Shift') keys.shift = false;
+            });
+
+            window.addEventListener('mousedown', (e) => {
+                if (isGameRunning && !isPaused && e.button === 0) {
+                    if (!mouseLocked) {
+                        document.body.requestPointerLock();
+                    } else {
+                        triggerBasicAttack();
+                    }
+                }
+            });
+
+            window.addEventListener('mousemove', (e) => {
+                if (document.pointerLockElement === document.body) {
+                    mouseLocked = true;
+                    camYaw -= e.movementX * 0.003;
+                    camPitch += e.movementY * 0.003;
+                    camPitch = Math.max(-0.35, Math.min(1.2, camPitch));
+                } else {
+                    mouseLocked = false;
+                }
+            });
+        }
+
+        function updatePlayerMovement(delta) {
+            if (!player.mesh) return;
+
+            const speed = HERO_TYPES[player.type].speed * (keys.shift ? 1.5 : 1.0);
+            const moveDir = new THREE.Vector3();
+
+            if (keys.w) moveDir.z -= 1;
+            if (keys.s) moveDir.z += 1;
+            if (keys.a) moveDir.x -= 1;
+            if (keys.d) moveDir.x += 1;
+
+            if (moveDir.lengthSq() > 0) {
+                moveDir.normalize();
+                moveDir.applyAxisAngle(new THREE.Vector3(0, 1, 0), camYaw);
+                player.pos.addScaledVector(moveDir, speed * delta);
+            }
+
+            // Standardize Player Yaw Orientation
+            player.rotY = camYaw + Math.PI;
+
+            // Jump & Gravity Physics
+            if (keys.space && player.isGrounded) {
+                player.vy = 12;
+                player.isGrounded = false;
+            }
+
+            player.vy -= 28 * delta;
+            player.pos.y += player.vy * delta;
+
+            const groundY = getTerrainHeight(player.pos.x, player.pos.z);
+            if (player.pos.y <= groundY) {
+                player.pos.y = groundY;
+                player.vy = 0;
+                player.isGrounded = true;
+            }
+
+            player.mesh.position.copy(player.pos);
+            player.mesh.rotation.y = player.rotY;
+
+            // SWORD SWING ANIMATION EFFECT FOR WARRIOR
+            if (player.type === 'WARRIOR' && player.swordMesh) {
+                if (player.isAttacking) {
+                    player.attackSwingAnim += delta * 15;
+                    player.swordMesh.rotation.x = Math.sin(player.attackSwingAnim) * 2.2;
+                    player.swordMesh.rotation.z = -Math.cos(player.attackSwingAnim) * 1.5;
+                    if (player.attackSwingAnim >= Math.PI) {
+                        player.isAttacking = false;
+                        player.attackSwingAnim = 0;
+                    }
+                } else {
+                    player.swordMesh.rotation.set(0.2, 0, -0.2);
+                }
+            }
+
+            // Camera Over-the-shoulder positioning
+            const forwardX = Math.sin(camYaw);
+            const forwardZ = Math.cos(camYaw);
+            const rightX = Math.cos(camYaw);
+            const rightZ = -Math.sin(camYaw);
+
+            let camX = player.pos.x + camDistance * forwardX * Math.cos(camPitch);
+            let camY = player.pos.y + 1.8 + camDistance * Math.sin(camPitch);
+            let camZ = player.pos.z + camDistance * forwardZ * Math.cos(camPitch);
+
+            camX += rightX * camRightOffset;
+            camZ += rightZ * camRightOffset;
+
+            const targetX = player.pos.x + rightX * (camRightOffset * 0.4);
+            const targetY = player.pos.y + 1.6 - Math.sin(camPitch) * 2.0;
+            const targetZ = player.pos.z + rightZ * (camRightOffset * 0.4);
+
+            camera.position.set(camX, camY, camZ);
+            camera.lookAt(targetX, targetY, targetZ);
+        }
+
+        /* ----------------------------------------------------
+           6. 3D AIMING DIR & MULTI-CLASS HIGH DAMAGE FX
+        ---------------------------------------------------- */
+        function get3DAimingVector() {
+            // Get exact normalized 3D direction vector from camera look direction
+            const dir = new THREE.Vector3();
+            camera.getWorldDirection(dir);
+            return dir;
+        }
+
+        function createSwordSlashVFX(pos, dir) {
+            // Hiệu ứng Arc chém kiếm bằng Mesh
+            const arcGeo = new THREE.RingGeometry(0.8, 2.2, 16, 1, 0, Math.PI * 0.7);
+            const arcMat = new THREE.MeshBasicMaterial({ 
+                color: 0x60a5fa, 
+                side: THREE.DoubleSide, 
+                transparent: true, 
+                opacity: 0.95 
+            });
+            const slash = new THREE.Mesh(arcGeo, arcMat);
+            slash.position.copy(pos).add(dir.clone().multiplyScalar(1.2));
+            slash.quaternion.setFromUnitVectors(new THREE.Vector3(0, 0, 1), dir.clone().normalize());
+            scene.add(slash);
+
+            let opacity = 0.95;
+            const interval = setInterval(() => {
+                opacity -= 0.15;
+                slash.scale.addScalar(0.08);
+                arcMat.opacity = opacity;
+                if (opacity <= 0) {
+                    clearInterval(interval);
+                    scene.remove(slash);
+                }
+            }, 25);
+        }
+
+        function spawnProjectile(startPos, dir, heroType, skillKey, isFromPlayer = true) {
+            let pGeo, pMat;
+            const skillData = HERO_TYPES[heroType].skills[skillKey] || { damage: 250 };
+
+            if (heroType === 'WARRIOR') {
+                // KIẾM KHÍ VỆT CHÉM (SÓNG KIẾM)
+                pGeo = new THREE.BoxGeometry(2.4, 0.2, 0.8);
+                pMat = new THREE.MeshStandardMaterial({ 
+                    color: 0x60a5fa, 
+                    emissive: 0x3b82f6, 
+                    emissiveIntensity: 2.0 
+                });
+                if (isFromPlayer) createSwordSlashVFX(startPos, dir);
+            } else if (heroType === 'ARCHER') {
+                // TÊN THẦN TIA SÁNG
+                pGeo = new THREE.ConeGeometry(0.18, 1.6, 8);
+                pGeo.rotateX(Math.PI / 2);
+                pMat = new THREE.MeshStandardMaterial({ color: 0x34d399, emissive: 0x10b981, emissiveIntensity: 1.5 });
+            } else if (heroType === 'GUNNER') {
+                // TÊN LỬA / ĐẠN PLASMA
+                pGeo = skillKey === 'R' ? new THREE.CylinderGeometry(0.3, 0.3, 1.8) : new THREE.SphereGeometry(0.25, 10, 10);
+                pMat = new THREE.MeshBasicMaterial({ color: 0xf87171 });
+            } else {
+                // PHÁP SƯ - CẦU PHÉP TỎA SÁNG
+                pGeo = new THREE.SphereGeometry(skillKey === 'R' ? 1.2 : 0.5, 16, 16);
+                pMat = new THREE.MeshStandardMaterial({ color: 0xc084fc, emissive: 0xa855f7, emissiveIntensity: 2.5 });
+            }
+
+            const pMesh = new THREE.Mesh(pGeo, pMat);
+            pMesh.position.copy(startPos);
+            
+            pMesh.quaternion.setFromUnitVectors(new THREE.Vector3(0, 0, -1), dir.clone().normalize());
+            scene.add(pMesh);
+
+            projectiles.push({
+                mesh: pMesh,
+                dir: dir.clone(),
+                speed: heroType === 'WARRIOR' ? 32 : (heroType === 'GUNNER' ? 52 : 40),
+                life: heroType === 'WARRIOR' ? 50 : 120,
+                damage: skillData.damage,
+                heroType: heroType,
+                isFromPlayer: isFromPlayer
+            });
+        }
+
+        function triggerBasicAttack() {
+            const dir = get3DAimingVector();
+            player.isAttacking = true;
+            player.attackSwingAnim = 0;
+
+            spawnProjectile(player.pos.clone().add(new THREE.Vector3(0, 1.4, 0)), dir, player.type, 'Q', true);
+            sendMultiplayerData({ type: 'ATTACK', x: player.pos.x, y: player.pos.y + 1.4, z: player.pos.z, dirX: dir.x, dirY: dir.y, dirZ: dir.z });
+        }
+
+        function triggerSkill(slot) {
+            const now = Date.now();
+            const cdKey = 'cd' + slot;
+            const skill = HERO_TYPES[player.type].skills[slot];
+
+            if (now < player[cdKey]) return;
+
+            player[cdKey] = now + skill.cd;
+            player.isAttacking = true;
+            player.attackSwingAnim = 0;
+
+            const dir = get3DAimingVector();
+            spawnProjectile(player.pos.clone().add(new THREE.Vector3(0, 1.4, 0)), dir, player.type, slot, true);
+
+            sendMultiplayerData({ type: 'ATTACK', x: player.pos.x, y: player.pos.y + 1.4, z: player.pos.z, dirX: dir.x, dirY: dir.y, dirZ: dir.z });
+
+            // Skill Cooldown UI
+            const cdOverlay = document.getElementById(`cd-${slot.toLowerCase()}`);
+            if (cdOverlay) {
+                cdOverlay.style.height = '100%';
+                let remaining = skill.cd;
+                const interval = setInterval(() => {
+                    remaining -= 100;
+                    const pct = Math.max(0, (remaining / skill.cd) * 100);
+                    cdOverlay.style.height = pct + '%';
+                    if (remaining <= 0) clearInterval(interval);
+                }, 100);
+            }
+        }
+
+        function createParticleExplosion(pos, colorHex, count = 30, scale = 1.0) {
+            for (let i = 0; i < count; i++) {
+                const pGeo = new THREE.SphereGeometry(0.14 * scale, 6, 6);
+                const pMat = new THREE.MeshBasicMaterial({ color: colorHex });
+                const p = new THREE.Mesh(pGeo, pMat);
+                p.position.copy(pos);
+                scene.add(p);
+
+                const vel = new THREE.Vector3(
+                    (Math.random() - 0.5) * 12 * scale,
+                    (Math.random() - 0.2) * 12 * scale,
+                    (Math.random() - 0.5) * 12 * scale
+                );
+
+                particleEffects.push({ mesh: p, vel: vel, life: 30 });
+            }
+        }
+
+        function updateParticles() {
+            for (let i = particleEffects.length - 1; i >= 0; i--) {
+                const p = particleEffects[i];
+                p.mesh.position.addScaledVector(p.vel, 0.016);
+                p.life--;
+                if (p.life <= 0) {
+                    scene.remove(p.mesh);
+                    particleEffects.splice(i, 1);
+                }
+            }
+            document.getElementById('val-particles').innerText = particleEffects.length;
+        }
+
+        function showDamageFloatingText(pos, amount) {
+            const container = document.getElementById('damage-container');
+            const screenPos = pos.clone().project(camera);
+            const x = (screenPos.x * 0.5 + 0.5) * window.innerWidth;
+            const y = (-(screenPos.y * 0.5) + 0.5) * window.innerHeight;
+
+            const el = document.createElement('div');
+            el.className = 'dmg-text text-3xl text-amber-300 font-extrabold';
+            el.innerText = '-' + Math.round(amount);
+            el.style.left = `${x}px`;
+            el.style.top = `${y}px`;
+            container.appendChild(el);
+
+            setTimeout(() => el.remove(), 800);
+        }
+
+        /* ----------------------------------------------------
+           7. WEBRTC + CLOUD FIREBASE REALTIME HYBRID SYNC
+        ---------------------------------------------------- */
+        function getNickname() {
+            return document.getElementById('player-nickname-input').value.trim() || 'Chiến Binh Aether';
+        }
+
+        function updateMenuStatus(msg) {
+            document.getElementById('menu-status').innerText = msg;
+        }
+
+        function selectHero(heroKey) {
+            selectedHeroKey = heroKey;
+            document.querySelectorAll('.hero-btn').forEach(btn => btn.classList.remove('glass-button-active'));
+            document.getElementById(`hero-${heroKey}`).classList.add('glass-button-active');
+            
+            if (gameMode === 'ONLINE' && lobbyState) {
+                if (isHost) lobbyState.hostHero = heroKey;
+                else lobbyState.guestHero = heroKey;
+                updateLobbyUI();
+                sendMultiplayerData({ type: 'HERO_SELECT', hero: heroKey });
+            }
+        }
+
+        function setupPeerEvents(conn) {
+            activePeerConn = conn;
+
+            conn.on('open', () => {
+                console.log('Peer Direct Connection Established!');
+                if (!isHost) {
+                    sendMultiplayerData({
+                        type: 'GUEST_JOIN',
+                        name: playerNickname,
+                        hero: selectedHeroKey
+                    });
+                }
+            });
+
+            conn.on('data', (data) => {
+                handleNetworkData(data);
+            });
+
+            conn.on('close', () => {
+                updateMenuStatus('Kết nối với đối phương đã ngắt.');
+            });
+        }
+
+        function setupFirebaseRelay(roomCode) {
+            if (!window.fbDb) return;
+
+            const roomRef = window.fbRef(window.fbDb, 'rooms/' + roomCode);
+
+            // Host hoặc Guest nhận update thông qua Firebase Realtime Database
+            window.fbOnValue(roomRef, (snapshot) => {
+                const data = snapshot.val();
+                if (!data) return;
+
+                if (isHost && data.guestData) {
+                    handleNetworkData(data.guestData);
+                } else if (!isHost && data.hostData) {
+                    handleNetworkData(data.hostData);
+                }
+            });
+        }
+
+        function sendMultiplayerData(data) {
+            // Send P2P via PeerJS first
+            if (activePeerConn && activePeerConn.open) {
+                activePeerConn.send(data);
+            }
+
+            // Relay Sync via Firebase Fallback for cross-network
+            if (window.fbDb && roomCode) {
+                const targetKey = isHost ? 'rooms/' + roomCode + '/hostData' : 'rooms/' + roomCode + '/guestData';
+                window.fbSet(window.fbRef(window.fbDb, targetKey), {
+                    payload: data,
+                    ts: Date.now()
+                });
+            }
+        }
+
+        function handleNetworkData(raw) {
+            const data = raw.payload ? raw.payload : raw;
+            if (!data) return;
+
+            if (data.type === 'GUEST_JOIN' && isHost) {
+                lobbyState.guestName = data.name;
+                lobbyState.guestHero = data.hero;
+                lobbyState.guestConnected = true;
+                lobbyState.guestReady = false;
+                updateLobbyUI();
+                sendMultiplayerData({
+                    type: 'LOBBY_SYNC',
+                    state: lobbyState
+                });
+            } else if (data.type === 'LOBBY_SYNC' && !isHost) {
+                lobbyState = data.state;
+                lobbyState.guestConnected = true;
+                updateLobbyUI();
+            } else if (data.type === 'HERO_SELECT') {
+                if (isHost) lobbyState.guestHero = data.hero;
+                else lobbyState.hostHero = data.hero;
+                updateLobbyUI();
+            } else if (data.type === 'GUEST_READY' && isHost) {
+                lobbyState.guestReady = data.ready;
+                updateLobbyUI();
+                sendMultiplayerData({
+                    type: 'LOBBY_SYNC',
+                    state: lobbyState
+                });
+            } else if (data.type === 'START_MATCH') {
+                launchOnlineBattle();
+            } else if (data.type === 'POS_SYNC' && gameMode === 'ONLINE') {
+                if (teammate.mesh) {
+                    teammate.pos.set(data.x, data.y, data.z);
+                    teammate.rotY = data.rotY;
+                    teammate.mesh.position.copy(teammate.pos);
+                    teammate.mesh.rotation.y = teammate.rotY;
+                }
+            } else if (data.type === 'ATTACK' && gameMode === 'ONLINE') {
+                const startPos = new THREE.Vector3(data.x, data.y, data.z);
+                const dir = new THREE.Vector3(data.dirX, data.dirY, data.dirZ);
+                spawnProjectile(startPos, dir, teammate.type, 'Q', true);
+            }
+        }
+
+        function syncMultiplayerState() {
+            if (gameMode === 'ONLINE') {
+                sendMultiplayerData({
+                    type: 'POS_SYNC',
+                    x: player.pos.x,
+                    y: player.pos.y,
+                    z: player.pos.z,
+                    rotY: player.rotY
+                });
+            }
+        }
+
+        function updateLobbyUI() {
+            document.getElementById('host-name').innerText = lobbyState.hostName || 'Host';
+            document.getElementById('host-hero-name').innerText = 'Tướng: ' + (HERO_TYPES[lobbyState.hostHero]?.name || lobbyState.hostHero);
+
+            document.getElementById('guest-name').innerText = lobbyState.guestConnected ? (lobbyState.guestName || 'Đồng Đội') : 'Đang chờ người tham gia...';
+            document.getElementById('guest-hero-name').innerText = 'Tướng: ' + (lobbyState.guestConnected ? (HERO_TYPES[lobbyState.guestHero]?.name || lobbyState.guestHero) : '--');
+
+            const guestStatusEl = document.getElementById('guest-status');
+            if (lobbyState.guestConnected) {
+                guestStatusEl.innerText = lobbyState.guestReady ? 'SẴN SÀNG' : 'CHƯA SẴN SÀNG';
+                guestStatusEl.className = lobbyState.guestReady
+                    ? 'mt-2 text-xs font-bold text-emerald-400 border border-emerald-500/40 px-3 py-1 rounded-full bg-emerald-500/10'
+                    : 'mt-2 text-xs font-bold text-yellow-400 border border-yellow-500/40 px-3 py-1 rounded-full bg-yellow-500/10';
+            } else {
+                guestStatusEl.innerText = 'CHƯA VÀO PHÒNG';
+                guestStatusEl.className = 'mt-2 text-xs font-bold text-gray-500 border border-gray-600/40 px-3 py-1 rounded-full bg-black/40';
+            }
+
+            const startBtn = document.getElementById('btn-start-game');
+            if (isHost) {
+                startBtn.classList.remove('hidden');
+                if (lobbyState.guestConnected && lobbyState.guestReady) {
+                    startBtn.disabled = false;
+                    startBtn.classList.remove('opacity-50', 'cursor-not-allowed');
+                } else {
+                    startBtn.disabled = true;
+                    startBtn.classList.add('opacity-50', 'cursor-not-allowed');
+                }
+            } else {
+                startBtn.classList.add('hidden');
+            }
+        }
+
+        function toggleGuestReady() {
+            if (isHost) return;
+            lobbyState.guestReady = !lobbyState.guestReady;
+            sendMultiplayerData({ type: 'GUEST_READY', ready: lobbyState.guestReady });
+            const readyBtn = document.getElementById('btn-toggle-ready');
+            readyBtn.innerText = lobbyState.guestReady ? 'HỦY SẴN SÀNG' : 'SẴN SÀNG';
+            updateLobbyUI();
+        }
+
+        function leaveLobby() {
+            if (activePeerConn) {
+                try { activePeerConn.close(); } catch(e) {}
+                activePeerConn = null;
+            }
+            if (peer) {
+                try { peer.destroy(); } catch(e) {}
+                peer = null;
+            }
+            
+            document.getElementById('lobby-modal').classList.add('hidden');
+            const mainMenu = document.getElementById('main-menu');
+            mainMenu.classList.remove('hidden', 'opacity-0', 'pointer-events-none');
+
+            gameMode = 'VS_AI';
+            isHost = false;
+            updateMenuStatus('Đã rời phòng chờ và quay về menu.');
+        }
+
+        /* ----------------------------------------------------
+           8. STAGE & SPAWN MOBS
+        ---------------------------------------------------- */
+        function startCurrentStage() {
+            activeMobs.forEach(mob => { if(mob.mesh) scene.remove(mob.mesh); });
+            activeMobs = [];
+
+            const stage = STAGES[currentStageIndex];
+            document.getElementById('hud-stage-title').innerText = stage.title;
+            document.getElementById('hud-stage-num').innerText = `${stage.id} / ${STAGES.length}`;
+            document.getElementById('hud-mobs-left').innerText = stage.mobCount;
+
+            for (let i = 0; i < stage.mobCount; i++) {
+                const angle = (i / stage.mobCount) * Math.PI * 2;
+                const dist = stage.isBossStage ? 25 : 22 + Math.random() * 20;
+                const mx = Math.cos(angle) * dist;
+                const mz = Math.sin(angle) * dist;
+
+                const heroKeys = Object.keys(HERO_TYPES);
+                const mobType = stage.isBossStage ? 'WARRIOR' : heroKeys[i % heroKeys.length];
+                const { group: mobMesh } = createHeroMesh(mobType);
+
+                if (stage.isBossStage) {
+                    mobMesh.scale.set(2.2, 2.2, 2.2);
+                }
+
+                const mob = {
+                    id: 'mob_' + Date.now() + '_' + i,
+                    mesh: mobMesh,
+                    type: mobType,
+                    hp: stage.mobHp,
+                    maxHp: stage.mobHp,
+                    speed: stage.speed,
+                    pos: new THREE.Vector3(mx, 0, mz),
+                    rotY: 0,
+                    lastAttack: 0,
+                    isBoss: stage.isBossStage
+                };
+
+                mobMesh.position.copy(mob.pos);
+                scene.add(mobMesh);
+                activeMobs.push(mob);
+            }
+        }
+
+        function updateMobsAI(delta) {
+            if (!isGameRunning || isPaused) return;
+
+            const now = Date.now();
+
+            for (let i = activeMobs.length - 1; i >= 0; i--) {
+                const mob = activeMobs[i];
+                if (mob.hp <= 0) continue;
+
+                let targetPos = player.pos;
+                if (gameMode === 'ONLINE' && teammate.mesh && teammate.hp > 0) {
+                    const distToPlayer = mob.pos.distanceTo(player.pos);
+                    const distToAlly = mob.pos.distanceTo(teammate.pos);
+                    if (distToAlly < distToPlayer) targetPos = teammate.pos;
+                }
+
+                const dist = mob.pos.distanceTo(targetPos);
+                const dir = targetPos.clone().sub(mob.pos).normalize();
+                mob.rotY = Math.atan2(-dir.x, -dir.z);
+
+                if (dist > 3) {
+                    mob.pos.addScaledVector(dir, mob.speed * delta);
+                }
+
+                mob.pos.y = getTerrainHeight(mob.pos.x, mob.pos.z);
+                mob.mesh.position.copy(mob.pos);
+                mob.mesh.rotation.y = mob.rotY;
+
+                if (dist < 22 && now - mob.lastAttack > 2200) {
+                    mob.lastAttack = now;
+                    spawnProjectile(mob.pos.clone().add(new THREE.Vector3(0, 1.6, 0)), dir, mob.type, 'Q', false);
+                }
+            }
+        }
+
+        /* ----------------------------------------------------
+           9. COMBAT & DAMAGE RESOLUTION
+        ---------------------------------------------------- */
+        function applyDamageToMob(mob, amount) {
+            mob.hp = Math.max(0, mob.hp - amount);
+            showDamageFloatingText(mob.pos, amount);
+
+            if (mob.hp <= 0) {
+                createParticleExplosion(mob.pos, 0xf59e0b, 35, 1.3);
+                scene.remove(mob.mesh);
+                const idx = activeMobs.indexOf(mob);
+                if (idx !== -1) activeMobs.splice(idx, 1);
+
+                document.getElementById('hud-mobs-left').innerText = activeMobs.length;
+
+                if (activeMobs.length === 0) {
+                    if (currentStageIndex < STAGES.length - 1) {
+                        currentStageIndex++;
+                        setTimeout(() => startCurrentStage(), 1500);
+                    } else {
+                        showGameOver(true);
+                    }
+                }
+            }
+        }
+
+        function updateProjectiles() {
+            for (let i = projectiles.length - 1; i >= 0; i--) {
+                const p = projectiles[i];
+                p.mesh.position.addScaledVector(p.dir, p.speed * 0.016);
+                p.life--;
+
+                if (p.isFromPlayer) {
+                    for (let j = activeMobs.length - 1; j >= 0; j--) {
+                        const mob = activeMobs[j];
+                        const dist = p.mesh.position.distanceTo(mob.pos.clone().add(new THREE.Vector3(0, 1.2, 0)));
+                        if (dist < (mob.isBoss ? 2.8 : 1.8)) {
+                            applyDamageToMob(mob, p.damage);
+                            createParticleExplosion(p.mesh.position, HERO_TYPES[p.heroType].color, 22, 1.0);
+                            scene.remove(p.mesh);
+                            projectiles.splice(i, 1);
+                            break;
+                        }
+                    }
+                } else {
+                    const distP = p.mesh.position.distanceTo(player.pos.clone().add(new THREE.Vector3(0, 1.2, 0)));
+                    if (distP < 1.6) {
+                        player.hp = Math.max(0, player.hp - p.damage);
+                        showDamageFloatingText(player.pos, p.damage);
+                        const playerPct = (player.hp / player.maxHp) * 100;
+                        document.getElementById('hud-hp-bar').style.width = playerPct + '%';
+                        document.getElementById('hud-hp-text').innerText = `${player.hp} / ${player.maxHp}`;
+
+                        if (player.hp <= 0) showGameOver(false);
+
+                        scene.remove(p.mesh);
+                        projectiles.splice(i, 1);
+                        continue;
+                    }
+                }
+
+                if (p.life <= 0) {
+                    scene.remove(p.mesh);
+                    projectiles.splice(i, 1);
+                }
+            }
+        }
+
+        /* ----------------------------------------------------
+           10. ROOM MULTIPLAYER HANDLERS
+        ---------------------------------------------------- */
+        function startSinglePlayer(e) {
+            if (e) {
+                e.preventDefault();
+                e.stopPropagation();
+            }
+            gameMode = 'VS_AI';
+            playerNickname = getNickname();
+            
+            if (peer) {
+                peer.destroy();
+                peer = null;
+            }
+
+            document.getElementById('lobby-modal').classList.add('hidden');
+            document.getElementById('hud-room-tag').classList.add('hidden');
+            document.getElementById('hud-ally-container').classList.add('hidden');
+
+            const mainMenu = document.getElementById('main-menu');
+            mainMenu.classList.add('opacity-0', 'pointer-events-none');
+            setTimeout(() => mainMenu.classList.add('hidden'), 300);
+
+            spawnGameEntities();
+            startGameplay();
+        }
+
+        function createOnlineRoom(e) {
+            if (e) {
+                e.preventDefault();
+                e.stopPropagation();
+            }
+            gameMode = 'ONLINE';
+            isHost = true;
+            playerNickname = getNickname();
+            
+            const randomCode = Math.floor(100000 + Math.random() * 900000).toString();
+            roomCode = randomCode;
+
+            lobbyState = {
+                hostName: playerNickname,
+                hostHero: selectedHeroKey,
+                hostReady: true,
+                guestName: 'Đang chờ đồng đội...',
+                guestHero: 'MAGE',
+                guestReady: false,
+                guestConnected: false
+            };
+
+            document.getElementById('main-menu').classList.add('hidden');
+            document.getElementById('lobby-room-code').innerText = roomCode;
+            document.getElementById('lobby-modal').classList.remove('hidden');
+            document.getElementById('btn-start-game').classList.remove('hidden');
+            document.getElementById('btn-toggle-ready').classList.add('hidden');
+            updateLobbyUI();
+
+            updateMenuStatus('Đang khởi tạo kết nối P2P + Relay cho mã phòng: ' + roomCode);
+
+            setupFirebaseRelay(roomCode);
+
+            if (peer) {
+                try { peer.destroy(); } catch(err) {}
+            }
+
+            try {
+                peer = new Peer('aether-room-' + roomCode, {
+                    debug: 1,
+                    config: {
+                        iceServers: [
+                            { urls: 'stun:stun.l.google.com:19020' },
+                            { urls: 'stun:stun1.l.google.com:19020' },
+                            { urls: 'stun:stun2.l.google.com:19020' }
+                        ]
+                    }
+                });
+
+                peer.on('open', (id) => {
+                    console.log('Host Peer ID Created:', id);
+                    updateMenuStatus('Phòng ' + roomCode + ' đã sẵn sàng! Mời đồng đội nhập mã này.');
+                });
+
+                peer.on('connection', (conn) => {
+                    setupPeerEvents(conn);
+                });
+
+                peer.on('error', (err) => {
+                    console.warn('PeerJS Host Warning, using Cloud Relay sync:', err);
+                    updateMenuStatus('Phòng ' + roomCode + ' đang sử dụng kênh Relay Cloud toàn cầu.');
+                });
+            } catch (err) {
+                console.warn('PeerJS Exception:', err);
+            }
+        }
+
+        function joinOnlineRoom(e) {
+            if (e) {
+                e.preventDefault();
+                e.stopPropagation();
+            }
+            const inputCode = document.getElementById('join-room-input').value.trim();
+            if (!inputCode || inputCode.length !== 6) {
+                updateMenuStatus('Vui lòng nhập Mã Phòng 6 chữ số hợp lệ!');
+                return;
+            }
+
+            gameMode = 'ONLINE';
+            isHost = false;
+            playerNickname = getNickname();
+            roomCode = inputCode;
+
+            document.getElementById('main-menu').classList.add('hidden');
+            document.getElementById('lobby-room-code').innerText = roomCode;
+            document.getElementById('lobby-modal').classList.remove('hidden');
+            document.getElementById('btn-start-game').classList.add('hidden');
+            document.getElementById('btn-toggle-ready').classList.remove('hidden');
+            updateLobbyUI();
+
+            updateMenuStatus('Đang kết nối tới phòng ' + roomCode + '...');
+
+            setupFirebaseRelay(roomCode);
+
+            sendMultiplayerData({
+                type: 'GUEST_JOIN',
+                name: playerNickname,
+                hero: selectedHeroKey
+            });
+
+            if (peer) {
+                try { peer.destroy(); } catch(err) {}
+            }
+
+            try {
+                peer = new Peer({
+                    debug: 1,
+                    config: {
+                        iceServers: [
+                            { urls: 'stun:stun.l.google.com:19020' },
+                            { urls: 'stun:stun1.l.google.com:19020' },
+                            { urls: 'stun:stun2.l.google.com:19020' }
+                        ]
+                    }
+                });
+
+                peer.on('open', () => {
+                    const hostPeerId = 'aether-room-' + roomCode;
+                    const conn = peer.connect(hostPeerId, { reliable: true });
+                    setupPeerEvents(conn);
+                });
+            } catch (err) {
+                console.warn('PeerJS Join Exception:', err);
+            }
+        }
+
+        function hostStartOnlineGame() {
+            if (!isHost || !lobbyState.guestConnected || !lobbyState.guestReady) return;
+            sendMultiplayerData({ type: 'START_MATCH' });
+            launchOnlineBattle();
+        }
+
+        function launchOnlineBattle() {
+            document.getElementById('lobby-modal').classList.add('hidden');
+            document.getElementById('main-menu').classList.add('hidden');
+
+            if (isHost) {
+                selectedHeroKey = lobbyState.hostHero;
+                teammate.type = lobbyState.guestHero;
+            } else {
+                selectedHeroKey = lobbyState.guestHero;
+                teammate.type = lobbyState.hostHero;
+            }
+
+            document.getElementById('hud-room-tag').classList.remove('hidden');
+            document.getElementById('hud-room-code').innerText = roomCode;
+            document.getElementById('hud-ally-container').classList.remove('hidden');
+
+            spawnGameEntities();
+            startGameplay();
+        }
+
+        function startGameplay() {
+            isGameRunning = true;
+            isPaused = false;
+            document.getElementById('game-hud').classList.remove('hidden');
+            document.body.requestPointerLock();
+        }
+
+        function togglePauseMenu() {
+            if (!isGameRunning) return;
+            isPaused = !isPaused;
+            if (isPaused) {
+                document.exitPointerLock();
+                document.getElementById('pause-overlay').classList.remove('hidden');
+            } else {
+                document.body.requestPointerLock();
+                document.getElementById('pause-overlay').classList.add('hidden');
+            }
+        }
+
+        function resumeGame() {
+            isPaused = false;
+            document.body.requestPointerLock();
+            document.getElementById('pause-overlay').classList.add('hidden');
+        }
+
+        function returnToMenu() {
+            isGameRunning = false;
+            isPaused = false;
+            document.exitPointerLock();
+            document.getElementById('pause-overlay').classList.add('hidden');
+            document.getElementById('game-over-modal').classList.add('hidden');
+            document.getElementById('game-hud').classList.add('hidden');
+            
+            const mainMenu = document.getElementById('main-menu');
+            mainMenu.classList.remove('hidden', 'opacity-0', 'pointer-events-none');
+        }
+
+        function showGameOver(isWin) {
+            isGameRunning = false;
+            document.exitPointerLock();
+            const modal = document.getElementById('game-over-modal');
+            const title = document.getElementById('game-over-title');
+            const desc = document.getElementById('game-over-desc');
+
+            if (isWin) {
+                title.innerText = "CHIẾN THẮNG RỰC RỠ!";
+                title.className = "text-4xl font-extrabold font-cinzel text-amber-400 mb-2";
+                desc.innerText = "Bạn và đồng đội đã quét sạch toàn bộ quái vật và Boss!";
+            } else {
+                title.innerText = "THẤT BẠI!";
+                title.className = "text-4xl font-extrabold font-cinzel text-red-500 mb-2";
+                desc.innerText = "Hero của bạn đã kiệt sức trước cạm bẫy vương quốc Aether.";
+            }
+
+            modal.classList.remove('hidden');
+        }
+
+        /* ----------------------------------------------------
+           11. MAIN ANIMATION LOOP
+        ---------------------------------------------------- */
+        function spawnGameEntities() {
+            if (player.mesh) scene.remove(player.mesh);
+            if (teammate.mesh) scene.remove(teammate.mesh);
+
+            player.type = selectedHeroKey;
+            player.hp = HERO_TYPES[selectedHeroKey].hp;
+            player.maxHp = HERO_TYPES[selectedHeroKey].hp;
+            player.pos.set(0, 0, 0);
+
+            const { group: pGroup, swordMesh: pSword } = createHeroMesh(player.type);
+            player.mesh = pGroup;
+            player.swordMesh = pSword;
+            scene.add(player.mesh);
+
+            if (gameMode === 'ONLINE') {
+                teammate.hp = HERO_TYPES[teammate.type].hp;
+                teammate.maxHp = HERO_TYPES[teammate.type].hp;
+                teammate.pos.set(3, 0, 3);
+                
+                const { group: tGroup, swordMesh: tSword } = createHeroMesh(teammate.type);
+                teammate.mesh = tGroup;
+                teammate.swordMesh = tSword;
+                scene.add(teammate.mesh);
+
+                const allyData = HERO_TYPES[teammate.type];
+                document.getElementById('hud-ally-name').innerText = allyData.name;
+                document.getElementById('hud-ally-icon').className = `fa-solid ${allyData.icon}`;
+                document.getElementById('hud-ally-hp-bar').style.width = '100%';
+                document.getElementById('hud-ally-hp-text').innerText = `${teammate.hp} / ${teammate.maxHp}`;
+            }
+
+            const heroData = HERO_TYPES[player.type];
+            document.getElementById('hud-hero-name').innerText = heroData.name;
+            document.getElementById('hud-hero-icon').className = `fa-solid ${heroData.icon}`;
+            document.getElementById('hud-hp-bar').style.width = '100%';
+            document.getElementById('hud-hp-text').innerText = `${player.hp} / ${player.maxHp}`;
+
+            document.getElementById('skill-name-q').innerText = heroData.skills.Q.name;
+            document.getElementById('skill-name-e').innerText = heroData.skills.E.name;
+            document.getElementById('skill-name-r').innerText = heroData.skills.R.name;
+
+            currentStageIndex = 0;
+            startCurrentStage();
+        }
+
+        function animate() {
+            requestAnimationFrame(animate);
+
+            const now = performance.now();
+            const delta = clock.getDelta();
+
+            frameCount++;
+            if (now >= fpsTimer + 1000) {
+                document.getElementById('val-fps').innerText = frameCount;
+                document.getElementById('val-ms').innerText = Math.round((now - lastFrameTime));
+                frameCount = 0;
+                fpsTimer = now;
+            }
+            lastFrameTime = now;
+
+            if (isGameRunning && !isPaused) {
+                updatePlayerMovement(delta);
+                updateProjectiles();
+                updateParticles();
+                updateMobsAI(delta);
+                syncMultiplayerState();
+            }
+
+            renderer.render(scene, camera);
+        }
+
+        window.onload = function() {
+            initThreeScene();
+            animate();
+        };
+    </script>
+</body>
+</html>
